@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -24,10 +23,11 @@ async def async_setup_entry(
 
 
 class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the current app's friendly name (Netflix, YouTube, etc.)."""
+    """Shows the friendly name of the running app (e.g. Netflix, YouTube)."""
 
     _attr_has_entity_name = True
     _attr_name = "Current App"
+    _attr_icon = "mdi:application"
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -36,22 +36,28 @@ class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> str:
-        return self.coordinator.data.get("app_name", "Off") if self.coordinator.data else "Off"
+        if self.coordinator.data:
+            return self.coordinator.data.get("app_name", "Unknown")
+        return "Unavailable"
 
     @property
     def icon(self) -> str:
         if self.coordinator.data:
-            return self.coordinator.data.get("app_icon", "mdi:television")
-        return "mdi:television"
+            return self.coordinator.data.get("app_icon", "mdi:application")
+        return "mdi:application"
 
 
 class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the raw package name (com.netflix.ninja, etc.)."""
+    """Shows the raw package name (e.g. com.netflix.ninja).
+
+    Useful for finding package names to use in Custom App Names.
+    """
 
     _attr_has_entity_name = True
     _attr_name = "App Package"
     _attr_icon = "mdi:package-variant"
-    _attr_entity_registry_enabled_default = False  # Hidden by default
+    # Enabled by default — users need this to find package names for custom mappings
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -60,4 +66,6 @@ class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> str | None:
-        return self.coordinator.data.get("app_package") if self.coordinator.data else None
+        if self.coordinator.data:
+            return self.coordinator.data.get("app_package")
+        return None

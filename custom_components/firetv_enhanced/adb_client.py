@@ -19,6 +19,37 @@ _RE_CURRENT_APP = re.compile(r"[{/]\s*(com\.\S+|org\.\S+|tv\.\S+|net\.\S+)")
 _RE_MEDIA_STATE = re.compile(r"state=PlaybackState\{state=(\d+)")
 _RE_MEDIA_TITLE = re.compile(r"description=.*?title=(.*?)(?:,|$)", re.DOTALL)
 
+# Android keycodes (numeric = always works, string names can fail on Fire TV)
+_KEY_POWER = 26
+_KEY_WAKEUP = 224
+_KEY_SLEEP = 223
+_KEY_PLAY = 126
+_KEY_PAUSE = 127
+_KEY_PLAY_PAUSE = 85
+_KEY_STOP = 86
+_KEY_NEXT = 87
+_KEY_PREVIOUS = 88
+_KEY_VOLUME_UP = 24
+_KEY_VOLUME_DOWN = 25
+_KEY_MUTE = 164
+_KEY_BACK = 4
+_KEY_HOME = 3
+
+# Android PlaybackState constants
+PLAYBACK_STATES = {
+    0: "none",
+    1: "stopped",
+    2: "paused",
+    3: "playing",
+    4: "fast_forwarding",
+    5: "rewinding",
+    6: "buffering",
+    7: "error",
+    8: "connecting",
+    9: "skipping_previous",
+    10: "skipping_next",
+}
+
 
 def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
     """Generate/load ADB key. BLOCKING — runs in executor only."""
@@ -43,22 +74,6 @@ def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
             pub = f.read()
 
     return PythonRSASigner(pub, priv)
-
-
-# Android PlaybackState constants
-PLAYBACK_STATES = {
-    0: "none",
-    1: "stopped",
-    2: "paused",
-    3: "playing",
-    4: "fast_forwarding",
-    5: "rewinding",
-    6: "buffering",
-    7: "error",
-    8: "connecting",
-    9: "skipping_previous",
-    10: "skipping_next",
-}
 
 
 class FireTVClient:
@@ -97,7 +112,7 @@ class FireTVClient:
             )
 
             # Warm up: run a quick command to fully establish the session
-            # This prevents the 30s delay on the first real command
+            # This prevents delay on the first real command
             await self._device.shell("echo ok")
 
             _LOGGER.info("Connected to Fire TV at %s:%d", self.host, self.port)
@@ -138,6 +153,10 @@ class FireTVClient:
             _LOGGER.debug("ADB binary command failed: %s — %s", cmd, err)
             return None
 
+    async def _key(self, keycode: int) -> None:
+        """Send a keyevent by numeric code (always reliable)."""
+        await self._shell(f"input keyevent {keycode}")
+
     async def get_state(self) -> dict[str, Any]:
         """Get device state in ONE ADB call."""
         result = await self._shell(
@@ -173,13 +192,11 @@ class FireTVClient:
         if not result:
             return info
 
-        # Playback state (playing, paused, stopped, etc.)
         match = _RE_MEDIA_STATE.search(result)
         if match:
             state_num = int(match.group(1))
             info["playback_state"] = PLAYBACK_STATES.get(state_num, "unknown")
 
-        # Media title
         match = _RE_MEDIA_TITLE.search(result)
         if match:
             title = match.group(1).strip()
@@ -189,89 +206,76 @@ class FireTVClient:
         return info
 
     async def screenshot(self) -> bytes | None:
-        """Take screenshot. Returns PNG bytes at native resolution."""
-        data = await self._shell_bytes("screencap -p")
+        """Take screenshot. Returns PNG bytes at native 16:9 resolution.
+
+        Uses exec-out for raw binary stream (prevents \\r\\n corruption).
+        """
+        data = await self._shell_bytes("exec-out screencap -p")
         if not data or len(data) < 100:
+            _LOGGER.debug("Screenshot returned no/tiny data (%d bytes)",
+                         len(data) if data else 0)
             return None
 
-        # ADB sometimes corrupts binary by replacing \n with \r\n
-        # Fix: replace \r\n back to \n only in non-PNG-header areas
-        # Check PNG signature
+        # Verify PNG signature
         if data[:4] == b'\x89PNG':
             return data
 
-        # If corrupted, try the \r\n fix
+        # Fallback: fix \r\n corruption (shouldn't happen with exec-out)
         fixed = data.replace(b'\r\n', b'\n')
         if fixed[:4] == b'\x89PNG':
+            _LOGGER.debug("Screenshot needed \\r\\n repair")
             return fixed
 
-        # Still broken — try alternative method
-        _LOGGER.debug("Screenshot PNG repair failed, trying alternative")
+        _LOGGER.warning("Screenshot is not valid PNG (%d bytes, header: %s)",
+                       len(data), data[:8].hex())
         return None
 
-    async def send_key(self, key: str) -> None:
-        await self._shell(f"input keyevent {key}")
+    # --- Media controls (numeric keycodes) ---
+
+    async def media_play(self) -> None:
+        await self._key(_KEY_PLAY)
+
+    async def media_pause(self) -> None:
+        await self._key(_KEY_PAUSE)
+
+    async def media_play_pause(self) -> None:
+        await self._key(_KEY_PLAY_PAUSE)
+
+    async def media_stop(self) -> None:
+        await self._key(_KEY_STOP)
+
+    async def media_next(self) -> None:
+        await self._key(_KEY_NEXT)
+
+    async def media_previous(self) -> None:
+        await self._key(_KEY_PREVIOUS)
+
+    # --- Volume (keycodes go through HDMI-CEC to control TV volume) ---
+
+    async def volume_up(self) -> None:
+        await self._key(_KEY_VOLUME_UP)
+
+    async def volume_down(self) -> None:
+        await self._key(_KEY_VOLUME_DOWN)
+
+    async def volume_mute(self) -> None:
+        await self._key(_KEY_MUTE)
+
+    # --- Navigation ---
+
+    async def turn_on(self) -> None:
+        await self._key(_KEY_WAKEUP)
+
+    async def turn_off(self) -> None:
+        await self._key(_KEY_SLEEP)
+
+    async def navigate_back(self) -> None:
+        await self._key(_KEY_BACK)
+
+    async def navigate_home(self) -> None:
+        await self._key(_KEY_HOME)
 
     async def launch_app(self, package: str) -> None:
         await self._shell(
             f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
         )
-
-    async def turn_on(self) -> None:
-        await self._shell("input keyevent WAKEUP")
-
-    async def turn_off(self) -> None:
-        await self._shell("input keyevent SLEEP")
-
-    async def set_volume(self, level: int) -> None:
-        """Set volume directly using media command."""
-        await self._shell(f"media volume --set {level} --stream 3")
-
-    async def volume_up(self) -> None:
-        await self._shell("media volume --adj raise --stream 3")
-
-    async def volume_down(self) -> None:
-        await self._shell("media volume --adj lower --stream 3")
-
-    async def volume_mute(self) -> None:
-        await self._shell("media volume --adj mute --stream 3")
-
-    async def get_volume(self) -> dict[str, Any]:
-        """Get current volume level."""
-        result = await self._shell("media volume --get --stream 3")
-        volume = 50
-        muted = False
-        if result:
-            # Parse: "Volume is X in range [0..Y]"
-            import re as _re
-            m = _re.search(r"Volume is (\d+) in range \[0\.\.(\d+)\]", result)
-            if m:
-                vol = int(m.group(1))
-                max_vol = int(m.group(2))
-                volume = round((vol / max_vol) * 100) if max_vol > 0 else 0
-            muted = "is muted" in result.lower()
-        return {"volume": volume, "muted": muted}
-
-    async def media_play_pause(self) -> None:
-        await self._shell("input keyevent MEDIA_PLAY_PAUSE")
-
-    async def media_play(self) -> None:
-        await self._shell("input keyevent MEDIA_PLAY")
-
-    async def media_pause(self) -> None:
-        await self._shell("input keyevent MEDIA_PAUSE")
-
-    async def media_stop(self) -> None:
-        await self._shell("input keyevent MEDIA_STOP")
-
-    async def media_next(self) -> None:
-        await self._shell("input keyevent MEDIA_NEXT")
-
-    async def media_previous(self) -> None:
-        await self._shell("input keyevent MEDIA_PREVIOUS")
-
-    async def navigate_back(self) -> None:
-        await self._shell("input keyevent BACK")
-
-    async def navigate_home(self) -> None:
-        await self._shell("input keyevent HOME")

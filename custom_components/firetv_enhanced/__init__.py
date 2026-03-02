@@ -29,9 +29,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client,
         name=entry.data.get(CONF_NAME, "firetv"),
         scan_interval=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL),
-        screenshot_interval=entry.options.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
+        screenshot_interval=entry.options.get(
+            "screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL
+        ),
     )
 
+    # Apply custom app names from options
     custom_apps = entry.options.get("custom_apps", {})
     if custom_apps:
         coordinator.set_custom_apps(custom_apps)
@@ -42,7 +45,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Reload integration when options change
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload when user changes settings in options flow."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

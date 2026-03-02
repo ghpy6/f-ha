@@ -36,6 +36,7 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
         Camera.__init__(self)
         self._attr_unique_id = f"{entry.entry_id}_camera"
         self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
+        self.content_type = "image/png"
 
     @property
     def is_on(self) -> bool:
@@ -48,10 +49,6 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
     ) -> bytes | None:
         """Return the latest screenshot as PNG."""
         data = self.coordinator.screenshot_data
-        if data and len(data) > 100:
-            # Verify it's actually a PNG
-            if data[:4] == b'\x89PNG':
-                return data
-            _LOGGER.debug("Screenshot data is not valid PNG (%d bytes, header: %s)",
-                         len(data), data[:8].hex())
+        if data and len(data) > 100 and data[:4] == b'\x89PNG':
+            return data
         return None

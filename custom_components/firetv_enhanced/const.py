@@ -8,6 +8,7 @@ DEFAULT_SCREENSHOT_INTERVAL = 10
 CONF_ADB_KEY = "adb_key"
 
 # Package name → friendly name + icon
+# Users can override these in Options → Custom app names
 APP_MAP: dict[str, dict[str, str]] = {
     "com.netflix.ninja": {"name": "Netflix", "icon": "mdi:netflix"},
     "com.google.android.youtube.tv": {"name": "YouTube", "icon": "mdi:youtube"},
@@ -16,6 +17,8 @@ APP_MAP: dict[str, dict[str, str]] = {
     "com.disney.disneyplus": {"name": "Disney+", "icon": "mdi:filmstrip"},
     "com.globo.globotv": {"name": "Globoplay", "icon": "mdi:television-play"},
     "com.spotify.tv.android": {"name": "Spotify", "icon": "mdi:spotify"},
+    "com.apple.atv": {"name": "Apple TV", "icon": "mdi:apple"},
+    "com.apple.android.music": {"name": "Apple Music", "icon": "mdi:apple"},
     "com.amazon.hedwig": {"name": "Alexa", "icon": "mdi:microphone"},
     "com.amazon.firetv.youtube": {"name": "YouTube", "icon": "mdi:youtube"},
     "org.xbmc.kodi": {"name": "Kodi", "icon": "mdi:kodi"},
@@ -27,4 +30,10 @@ APP_MAP: dict[str, dict[str, str]] = {
     "com.amazon.tv.settings": {"name": "Settings", "icon": "mdi:cog"},
     "com.amazon.firetv.screensaver": {"name": "Screensaver", "icon": "mdi:weather-night"},
     "com.amazon.tv.notificationcenter": {"name": "Notifications", "icon": "mdi:bell"},
+    "com.amazon.music.tv": {"name": "Amazon Music", "icon": "mdi:music"},
+    "com.amazon.firebat": {"name": "Silk Browser", "icon": "mdi:web"},
+    "com.amazon.cardinal": {"name": "App Mgr", "icon": "mdi:apps"},
+    "com.deezer.tv": {"name": "Deezer", "icon": "mdi:music"},
+    "com.starz.starzplay.android": {"name": "Starz", "icon": "mdi:filmstrip"},
+    "com.bamtechmedia.dominguez.main": {"name": "Star+", "icon": "mdi:star"},
 }
