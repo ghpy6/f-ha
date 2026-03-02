@@ -33,12 +33,10 @@ async def async_setup_entry(
 
 
 class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity):
-    """Fire TV media player with HDMI-CEC volume and media controls."""
+    """Fire TV media player."""
 
     _attr_has_entity_name = True
     _attr_name = None
-    # No VOLUME_SET — Fire TV cannot set absolute volume via ADB
-    # Volume up/down/mute go through HDMI-CEC to control the TV
     _attr_supported_features = (
         MediaPlayerEntityFeature.PAUSE
         | MediaPlayerEntityFeature.PLAY
@@ -47,8 +45,6 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.NEXT_TRACK
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
-        | MediaPlayerEntityFeature.VOLUME_STEP
-        | MediaPlayerEntityFeature.VOLUME_MUTE
         | MediaPlayerEntityFeature.SELECT_SOURCE
     )
 
@@ -147,15 +143,6 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
     async def async_media_previous_track(self) -> None:
         await self.coordinator.client.media_previous()
         await self.coordinator.async_request_refresh()
-
-    async def async_volume_up(self) -> None:
-        await self.coordinator.client.volume_up()
-
-    async def async_volume_down(self) -> None:
-        await self.coordinator.client.volume_down()
-
-    async def async_mute_volume(self, mute: bool) -> None:
-        await self.coordinator.client.volume_mute()
 
     async def async_select_source(self, source: str) -> None:
         pkg = self.coordinator.get_package_for_source(source)

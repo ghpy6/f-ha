@@ -24,7 +24,7 @@ async def async_setup_entry(
 
 
 class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
-    """Fire TV screen as a camera entity. Native 16:9 resolution."""
+    """Fire TV screen as a camera entity."""
 
     _attr_has_entity_name = True
     _attr_name = "Screen"
@@ -47,7 +47,6 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return the latest screenshot as PNG."""
         data = self.coordinator.screenshot_data
         if data and len(data) > 100 and data[:4] == b'\x89PNG':
             return data

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 import re
@@ -19,8 +20,7 @@ _RE_CURRENT_APP = re.compile(r"[{/]\s*(com\.\S+|org\.\S+|tv\.\S+|net\.\S+)")
 _RE_MEDIA_STATE = re.compile(r"state=PlaybackState\{state=(\d+)")
 _RE_MEDIA_TITLE = re.compile(r"description=.*?title=(.*?)(?:,|$)", re.DOTALL)
 
-# Android keycodes (numeric = always works, string names can fail on Fire TV)
-_KEY_POWER = 26
+# Numeric keycodes (always reliable on Fire TV)
 _KEY_WAKEUP = 224
 _KEY_SLEEP = 223
 _KEY_PLAY = 126
@@ -29,25 +29,13 @@ _KEY_PLAY_PAUSE = 85
 _KEY_STOP = 86
 _KEY_NEXT = 87
 _KEY_PREVIOUS = 88
-_KEY_VOLUME_UP = 24
-_KEY_VOLUME_DOWN = 25
-_KEY_MUTE = 164
 _KEY_BACK = 4
 _KEY_HOME = 3
 
-# Android PlaybackState constants
 PLAYBACK_STATES = {
-    0: "none",
-    1: "stopped",
-    2: "paused",
-    3: "playing",
-    4: "fast_forwarding",
-    5: "rewinding",
-    6: "buffering",
-    7: "error",
-    8: "connecting",
-    9: "skipping_previous",
-    10: "skipping_next",
+    0: "none", 1: "stopped", 2: "paused", 3: "playing",
+    4: "fast_forwarding", 5: "rewinding", 6: "buffering",
+    7: "error", 8: "connecting",
 }
 
 
@@ -94,7 +82,7 @@ class FireTVClient:
         return self._device is not None and self._device.available
 
     async def connect(self, timeout: float = 30.0) -> bool:
-        """Connect to Fire TV. 30s timeout to allow TV approval dialog."""
+        """Connect to Fire TV."""
         try:
             if self._signer is None:
                 loop = asyncio.get_running_loop()
@@ -111,8 +99,7 @@ class FireTVClient:
                 auth_timeout_s=timeout,
             )
 
-            # Warm up: run a quick command to fully establish the session
-            # This prevents delay on the first real command
+            # Warm up session — prevents delay on first real command
             await self._device.shell("echo ok")
 
             _LOGGER.info("Connected to Fire TV at %s:%d", self.host, self.port)
@@ -120,7 +107,7 @@ class FireTVClient:
 
         except Exception as err:
             _LOGGER.error(
-                "Failed to connect to Fire TV at %s:%d — %s: %s",
+                "Failed to connect to %s:%d — %s: %s",
                 self.host, self.port, type(err).__name__, err,
             )
             self._device = None
@@ -142,19 +129,8 @@ class FireTVClient:
             _LOGGER.debug("ADB command failed: %s — %s", cmd, err)
             return None
 
-    async def _shell_bytes(self, cmd: str) -> bytes | None:
-        """Execute ADB shell command, return raw bytes."""
-        if not self.connected:
-            return None
-        try:
-            async with self._lock:
-                return await self._device.shell(cmd, decode=False)
-        except Exception as err:
-            _LOGGER.debug("ADB binary command failed: %s — %s", cmd, err)
-            return None
-
     async def _key(self, keycode: int) -> None:
-        """Send a keyevent by numeric code (always reliable)."""
+        """Send a keyevent by numeric code."""
         await self._shell(f"input keyevent {keycode}")
 
     async def get_state(self) -> dict[str, Any]:
@@ -181,14 +157,11 @@ class FireTVClient:
         return {"screen_on": screen_on, "app_package": app_package}
 
     async def get_media_info(self) -> dict[str, Any]:
-        """Get media session info (what's playing, state, title)."""
+        """Get media session info."""
         result = await self._shell(
             "dumpsys media_session | grep -A 20 'state=PlaybackState'"
         )
-        info: dict[str, Any] = {
-            "playback_state": "idle",
-            "media_title": None,
-        }
+        info: dict[str, Any] = {"playback_state": "idle", "media_title": None}
         if not result:
             return info
 
@@ -206,31 +179,33 @@ class FireTVClient:
         return info
 
     async def screenshot(self) -> bytes | None:
-        """Take screenshot. Returns PNG bytes at native 16:9 resolution.
+        """Take screenshot via base64 encoding (avoids binary corruption).
 
-        Uses exec-out for raw binary stream (prevents \\r\\n corruption).
+        ADB shell protocol corrupts raw binary by converting \\n to \\r\\n.
+        Encoding as base64 on the device produces clean ASCII text that
+        transfers perfectly, then we decode it back to PNG bytes.
         """
-        data = await self._shell_bytes("exec-out screencap -p")
-        if not data or len(data) < 100:
-            _LOGGER.debug("Screenshot returned no/tiny data (%d bytes)",
-                         len(data) if data else 0)
+        result = await self._shell("screencap -p | base64 2>/dev/null")
+        if not result or len(result) < 100:
+            _LOGGER.debug("Screenshot base64 returned empty")
             return None
 
-        # Verify PNG signature
-        if data[:4] == b'\x89PNG':
-            return data
+        try:
+            data = base64.b64decode(result.strip())
+        except Exception as err:
+            _LOGGER.debug("Screenshot base64 decode failed: %s", err)
+            return None
 
-        # Fallback: fix \r\n corruption (shouldn't happen with exec-out)
-        fixed = data.replace(b'\r\n', b'\n')
-        if fixed[:4] == b'\x89PNG':
-            _LOGGER.debug("Screenshot needed \\r\\n repair")
-            return fixed
+        if data[:4] != b'\x89PNG':
+            _LOGGER.debug(
+                "Screenshot not valid PNG (%d bytes, header: %s)",
+                len(data), data[:8].hex(),
+            )
+            return None
 
-        _LOGGER.warning("Screenshot is not valid PNG (%d bytes, header: %s)",
-                       len(data), data[:8].hex())
-        return None
+        return data
 
-    # --- Media controls (numeric keycodes) ---
+    # --- Media controls ---
 
     async def media_play(self) -> None:
         await self._key(_KEY_PLAY)
@@ -250,24 +225,15 @@ class FireTVClient:
     async def media_previous(self) -> None:
         await self._key(_KEY_PREVIOUS)
 
-    # --- Volume (keycodes go through HDMI-CEC to control TV volume) ---
-
-    async def volume_up(self) -> None:
-        await self._key(_KEY_VOLUME_UP)
-
-    async def volume_down(self) -> None:
-        await self._key(_KEY_VOLUME_DOWN)
-
-    async def volume_mute(self) -> None:
-        await self._key(_KEY_MUTE)
-
-    # --- Navigation ---
+    # --- Power ---
 
     async def turn_on(self) -> None:
         await self._key(_KEY_WAKEUP)
 
     async def turn_off(self) -> None:
         await self._key(_KEY_SLEEP)
+
+    # --- Navigation ---
 
     async def navigate_back(self) -> None:
         await self._key(_KEY_BACK)

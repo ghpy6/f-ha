@@ -2,22 +2,22 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect your Fire TV",
-        "description": "**Before you start:**\n1. On your Fire TV, go to **Settings → My Fire TV → Developer Options** and enable **ADB Debugging**\n2. Find your Fire TV IP at **Settings → My Fire TV → About → Network → IP Address**\n3. Enter the IP below and click Submit\n4. **Look at your TV screen** — approve the USB debugging prompt within 30 seconds\n\nMake sure Home Assistant and Fire TV are on the same network.",
+        "title": "Set up your Fire TV",
+        "description": "How to find your Fire TV IP address:\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\nHow to enable ADB Debugging:\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nAfter clicking Submit, look at your TV screen, approve the USB debugging prompt within 30 seconds.\n\nBoth devices must be on the same Wi-Fi network.",
         "data": {
-          "host": "Fire TV IP Address (e.g. 192.168.1.100)",
-          "port": "ADB Port (default: 5555)",
+          "host": "Fire TV IP Address",
+          "port": "ADB Port",
           "name": "Device Name"
         },
         "data_description": {
-          "host": "Found at Settings → My Fire TV → About → Network",
-          "port": "Only change if you modified the default ADB port",
-          "name": "A friendly name for this device on your dashboard"
+          "host": "Example: 192.168.1.100 (found at Settings \u2192 My Fire TV \u2192 About \u2192 Network)",
+          "port": "Default is 5555, only change if you modified it",
+          "name": "Friendly name shown on your dashboard"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect. Verify the IP is correct, ADB Debugging is on, and you approved the prompt on your TV screen. Try again — you have 30 seconds to approve."
+      "cannot_connect": "Could not connect. Check the IP address is correct, ADB Debugging is enabled, and approve the connection prompt on your TV screen. You have 30 seconds to approve after clicking Submit."
     },
     "abort": {
       "already_configured": "This Fire TV is already configured."
@@ -26,17 +26,25 @@
   "options": {
     "step": {
       "init": {
-        "title": "Fire TV Enhanced Settings",
-        "description": "Adjust polling intervals and customize app names.\n\nTo rename apps, add one per line in the format:\n`com.example.app = My Custom Name`\n\nExample:\n`com.apple.atv = Apple TV`\n`com.globo.globotv = Globoplay`",
+        "title": "Polling Settings",
+        "description": "Control how often the integration checks your Fire TV for updates.",
         "data": {
-          "scan_interval": "State polling interval (seconds)",
-          "screenshot_interval": "Screenshot interval (seconds)",
-          "custom_apps_text": "Custom app names (package = Name, one per line)"
+          "scan_interval": "App detection interval",
+          "screenshot_interval": "Screenshot capture interval"
         },
         "data_description": {
-          "scan_interval": "How often to check which app is running (2-60s, default 5)",
-          "screenshot_interval": "How often to take a screenshot (5-120s, default 10)",
-          "custom_apps_text": "Override app names shown on your dashboard. Check the 'App Package' sensor for the package name."
+          "scan_interval": "How often to check which app is running (lower = faster updates, higher CPU)",
+          "screenshot_interval": "How often to capture a new screenshot of the screen"
+        }
+      },
+      "custom_apps": {
+        "title": "Custom App Names",
+        "description": "Rename apps that show incorrectly on your dashboard. Use the App Package sensor to find the package name, then add one entry per line.\n\nFormat: package.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch",
+        "data": {
+          "custom_apps_text": "Custom app names"
+        },
+        "data_description": {
+          "custom_apps_text": "One per line: package.name = Display Name"
         }
       }
     }

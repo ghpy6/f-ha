@@ -7,6 +7,14 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .adb_client import FireTVClient
 from .const import DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
@@ -18,7 +26,7 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle user step."""
+        """Handle initial setup."""
         errors = {}
 
         if user_input is not None:
@@ -45,9 +53,13 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_HOST): str,
+                vol.Required(CONF_HOST): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
-                vol.Optional(CONF_NAME, default="Fire TV"): str,
+                vol.Optional(CONF_NAME, default="Fire TV"): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
             }),
             errors=errors,
         )
@@ -55,30 +67,59 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Options flow for editing settings after install."""
         return FireTVOptionsFlow(config_entry)
 
 
 class FireTVOptionsFlow(config_entries.OptionsFlow):
-    """Options flow — edit app names, intervals, etc."""
+    """Options flow — intervals and custom app names."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        """Main options menu."""
+        """Settings step — intervals."""
         if user_input is not None:
-            # Save options
-            new_options = dict(self._config_entry.options)
-            new_options["scan_interval"] = user_input.get(
-                "scan_interval", DEFAULT_SCAN_INTERVAL
-            )
-            new_options["screenshot_interval"] = user_input.get(
-                "screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL
-            )
-            new_options["custom_apps_text"] = user_input.get("custom_apps_text", "")
+            # Store interval values, move to custom apps step
+            self._interval_data = user_input
+            return await self.async_step_custom_apps()
 
-            # Parse custom apps text → dict
+        opts = self._config_entry.options
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "scan_interval",
+                    default=opts.get("scan_interval", DEFAULT_SCAN_INTERVAL),
+                ): NumberSelector(NumberSelectorConfig(
+                    min=2, max=60, step=1,
+                    unit_of_measurement="seconds",
+                    mode=NumberSelectorMode.BOX,
+                )),
+                vol.Optional(
+                    "screenshot_interval",
+                    default=opts.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
+                ): NumberSelector(NumberSelectorConfig(
+                    min=5, max=120, step=1,
+                    unit_of_measurement="seconds",
+                    mode=NumberSelectorMode.BOX,
+                )),
+            }),
+        )
+
+    async def async_step_custom_apps(self, user_input=None):
+        """Custom app names step."""
+        if user_input is not None:
+            # Merge interval data + custom apps
+            new_options = dict(self._config_entry.options)
+            new_options["scan_interval"] = int(
+                self._interval_data.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+            )
+            new_options["screenshot_interval"] = int(
+                self._interval_data.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL)
+            )
+
+            # Parse custom apps text
             custom_apps = {}
             raw = user_input.get("custom_apps_text", "")
             for line in raw.strip().splitlines():
@@ -89,31 +130,30 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                     name = name.strip()
                     if pkg and name:
                         custom_apps[pkg] = name
+
             new_options["custom_apps"] = custom_apps
+            new_options["custom_apps_text"] = raw
 
             return self.async_create_entry(title="", data=new_options)
 
-        # Current values
+        # Load existing custom apps
         opts = self._config_entry.options
         current_custom = opts.get("custom_apps", {})
-        custom_text = "\n".join(
-            f"{pkg} = {name}" for pkg, name in current_custom.items()
-        )
+        custom_text = opts.get("custom_apps_text", "")
+        if not custom_text and current_custom:
+            custom_text = "\n".join(
+                f"{pkg} = {name}" for pkg, name in current_custom.items()
+            )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="custom_apps",
             data_schema=vol.Schema({
-                vol.Optional(
-                    "scan_interval",
-                    default=opts.get("scan_interval", DEFAULT_SCAN_INTERVAL),
-                ): vol.All(int, vol.Range(min=2, max=60)),
-                vol.Optional(
-                    "screenshot_interval",
-                    default=opts.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
-                ): vol.All(int, vol.Range(min=5, max=120)),
                 vol.Optional(
                     "custom_apps_text",
                     default=custom_text,
-                ): str,
+                ): TextSelector(TextSelectorConfig(
+                    multiline=True,
+                    type=TextSelectorType.TEXT,
+                )),
             }),
         )

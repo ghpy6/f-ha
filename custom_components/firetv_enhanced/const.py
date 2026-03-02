@@ -5,10 +5,8 @@ DEFAULT_PORT = 5555
 DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_SCREENSHOT_INTERVAL = 10
 
-CONF_ADB_KEY = "adb_key"
-
 # Package name → friendly name + icon
-# Users can override these in Options → Custom app names
+# Users can override or add more in Options → Custom App Names
 APP_MAP: dict[str, dict[str, str]] = {
     "com.netflix.ninja": {"name": "Netflix", "icon": "mdi:netflix"},
     "com.google.android.youtube.tv": {"name": "YouTube", "icon": "mdi:youtube"},
@@ -24,6 +22,7 @@ APP_MAP: dict[str, dict[str, str]] = {
     "org.xbmc.kodi": {"name": "Kodi", "icon": "mdi:kodi"},
     "com.plexapp.android": {"name": "Plex", "icon": "mdi:plex"},
     "tv.twitch.android.app": {"name": "Twitch", "icon": "mdi:twitch"},
+    "tv.twitch.android.viewer": {"name": "Twitch", "icon": "mdi:twitch"},
     "com.hbo.hbonow": {"name": "HBO Max", "icon": "mdi:filmstrip"},
     "com.crunchyroll.crunchyroid": {"name": "Crunchyroll", "icon": "mdi:animation-play"},
     "com.amazon.venezia": {"name": "App Store", "icon": "mdi:store"},
@@ -32,8 +31,6 @@ APP_MAP: dict[str, dict[str, str]] = {
     "com.amazon.tv.notificationcenter": {"name": "Notifications", "icon": "mdi:bell"},
     "com.amazon.music.tv": {"name": "Amazon Music", "icon": "mdi:music"},
     "com.amazon.firebat": {"name": "Silk Browser", "icon": "mdi:web"},
-    "com.amazon.cardinal": {"name": "App Mgr", "icon": "mdi:apps"},
     "com.deezer.tv": {"name": "Deezer", "icon": "mdi:music"},
-    "com.starz.starzplay.android": {"name": "Starz", "icon": "mdi:filmstrip"},
     "com.bamtechmedia.dominguez.main": {"name": "Star+", "icon": "mdi:star"},
 }

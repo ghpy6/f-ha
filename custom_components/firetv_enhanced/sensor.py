@@ -23,7 +23,7 @@ async def async_setup_entry(
 
 
 class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the friendly name of the running app (e.g. Netflix, YouTube)."""
+    """Shows the friendly name of the running app."""
 
     _attr_has_entity_name = True
     _attr_name = "Current App"
@@ -48,15 +48,11 @@ class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
 
 
 class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the raw package name (e.g. com.netflix.ninja).
-
-    Useful for finding package names to use in Custom App Names.
-    """
+    """Shows the raw package name. Use this to find package names for custom app names."""
 
     _attr_has_entity_name = True
     _attr_name = "App Package"
     _attr_icon = "mdi:package-variant"
-    # Enabled by default — users need this to find package names for custom mappings
     _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:

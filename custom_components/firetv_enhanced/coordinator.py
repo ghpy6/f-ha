@@ -39,11 +39,9 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._custom_apps: dict[str, str] = {}
 
     def set_custom_apps(self, apps: dict[str, str]) -> None:
-        """Set user-defined package→name overrides."""
         self._custom_apps = apps
 
     def _get_merged_apps(self) -> dict[str, dict[str, str]]:
-        """Merge built-in + custom app names. Custom wins."""
         merged = dict(APP_MAP)
         for pkg, name in self._custom_apps.items():
             merged[pkg] = {"name": name, "icon": "mdi:application"}
@@ -52,14 +50,11 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_app_name(self, package: str | None) -> str:
         if not package:
             return "Off"
-        # Custom overrides first
         if package in self._custom_apps:
             return self._custom_apps[package]
-        # Built-in map
         info = APP_MAP.get(package)
         if info:
             return info["name"]
-        # Auto-generate from package: com.apple.atv → Atv
         parts = package.split(".")
         if len(parts) >= 3:
             return parts[-1].replace("_", " ").title()
@@ -72,17 +67,12 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return info["icon"] if info else "mdi:application"
 
     def get_source_list(self) -> list[str]:
-        """All launchable app names (built-in + custom)."""
         merged = self._get_merged_apps()
-        # Exclude non-launchable "apps"
         skip = {"com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
                 "com.amazon.tv.settings", "com.amazon.tv.notificationcenter"}
-        return sorted(
-            v["name"] for k, v in merged.items() if k not in skip
-        )
+        return sorted(v["name"] for k, v in merged.items() if k not in skip)
 
     def get_package_for_source(self, source: str) -> str | None:
-        """Find package name for a source display name."""
         merged = self._get_merged_apps()
         for pkg, info in merged.items():
             if info["name"] == source:
@@ -90,7 +80,6 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return None
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch state from Fire TV."""
         if not self.client.connected:
             connected = await self.client.connect()
             if not connected:
@@ -112,7 +101,6 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "media_title": None,
         }
 
-        # Media info when an app is active (not launcher/screensaver)
         if screen_on and package not in (
             "com.amazon.tv.launcher", "com.amazon.firetv.screensaver", None
         ):
@@ -128,7 +116,7 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._screenshot_counter >= polls_needed:
                 self._screenshot_counter = 0
                 img = await self.client.screenshot()
-                if img and len(img) > 100:
+                if img:
                     self.screenshot_data = img
 
         return data
