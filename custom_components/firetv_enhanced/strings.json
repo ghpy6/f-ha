@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Fire TV",
+        "description": "Enter your Fire TV's IP address. Make sure ADB Debugging is enabled on the device (Settings → My Fire TV → Developer Options → ADB Debugging).",
+        "data": {
+          "host": "IP Address",
+          "port": "Port",
+          "name": "Name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect. Check the IP, ensure ADB is enabled, and approve the connection on your TV."
+    },
+    "abort": {
+      "already_configured": "This Fire TV is already configured."
+    }
+  }
+}

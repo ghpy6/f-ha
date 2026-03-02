@@ -1,0 +1,11 @@
+{
+  "domain": "firetv_enhanced",
+  "name": "Fire TV Enhanced",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/ha-firetv-enhanced",
+  "iot_class": "local_polling",
+  "requirements": ["adb-shell[async]>=0.4.4"],
+  "version": "1.0.0"
+}
