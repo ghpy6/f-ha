@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from typing import Any
 
@@ -13,53 +14,79 @@ from adb_shell.auth.sign_pythonrsa import PythonRSASigner
 
 _LOGGER = logging.getLogger(__name__)
 
-# Regex to extract package from mCurrentFocus or mResumedActivity
-_RE_CURRENT_APP = re.compile(r"[{/]\s*(com\.\S+|org\.\S+|tv\.\S+|net\.\S+)")
 _RE_RESUMED = re.compile(r"mResumedActivity.*?(\S+)/")
-_RE_VOLUME = re.compile(r"STREAM_MUSIC.*?index[=:](\d+)", re.DOTALL)
-_RE_MUTED = re.compile(r"STREAM_MUSIC.*?mute.*?(true|false)", re.DOTALL | re.IGNORECASE)
+_RE_CURRENT_APP = re.compile(r"[{/]\s*(com\.\S+|org\.\S+|tv\.\S+|net\.\S+)")
+
+
+def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
+    """Generate/load ADB key. BLOCKING — must be called from executor only."""
+    if config_dir:
+        key_dir = os.path.join(config_dir, ".firetv_enhanced")
+    else:
+        key_dir = os.path.join(os.path.expanduser("~"), ".firetv_enhanced")
+    os.makedirs(key_dir, exist_ok=True)
+    key_path = os.path.join(key_dir, "adbkey")
+
+    if not os.path.exists(key_path):
+        _LOGGER.info("Generating new ADB key at %s", key_path)
+        keygen(key_path)
+
+    with open(key_path) as f:
+        priv = f.read()
+
+    pub = ""
+    pub_path = key_path + ".pub"
+    if os.path.exists(pub_path):
+        with open(pub_path) as f:
+            pub = f.read()
+
+    return PythonRSASigner(pub, priv)
 
 
 class FireTVClient:
     """Async ADB client optimized for Fire TV."""
 
-    def __init__(self, host: str, port: int = 5555, adb_key_path: str | None = None) -> None:
+    def __init__(
+        self, host: str, port: int = 5555, hass_config_dir: str | None = None
+    ) -> None:
         self.host = host
         self.port = port
-        self._adb_key_path = adb_key_path
+        self._hass_config_dir = hass_config_dir
         self._device: AdbDeviceTcpAsync | None = None
         self._lock = asyncio.Lock()
+        self._signer: PythonRSASigner | None = None
 
     @property
     def connected(self) -> bool:
         return self._device is not None and self._device.available
 
-    async def connect(self) -> bool:
-        """Connect to the Fire TV device."""
+    async def connect(self, timeout: float = 30.0) -> bool:
+        """Connect to Fire TV. 30s timeout to allow TV approval dialog."""
         try:
-            self._device = AdbDeviceTcpAsync(self.host, self.port)
-            signer = None
+            # Load/create key in executor (not in event loop)
+            if self._signer is None:
+                loop = asyncio.get_running_loop()
+                self._signer = await loop.run_in_executor(
+                    None, _setup_key_sync, self._hass_config_dir
+                )
 
-            if self._adb_key_path:
-                with open(self._adb_key_path) as f:
-                    priv = f.read()
-                signer = PythonRSASigner("", priv)
-            else:
-                # Generate a key if none provided
-                import tempfile, os
-                key_path = os.path.join(tempfile.gettempdir(), "firetv_enhanced_adbkey")
-                if not os.path.exists(key_path):
-                    keygen(key_path)
-                with open(key_path) as f:
-                    priv = f.read()
-                signer = PythonRSASigner("", priv)
+            self._device = AdbDeviceTcpAsync(
+                self.host, self.port, default_transport_timeout_s=timeout
+            )
 
-            await self._device.connect(rsa_keys=[signer], auth_timeout_s=10.0)
+            await self._device.connect(
+                rsa_keys=[self._signer],
+                auth_timeout_s=timeout,
+            )
+
             _LOGGER.info("Connected to Fire TV at %s:%d", self.host, self.port)
             return True
 
         except Exception as err:
-            _LOGGER.error("Failed to connect to %s:%d: %s", self.host, self.port, err)
+            _LOGGER.error(
+                "Failed to connect to Fire TV at %s:%d — %s: %s",
+                self.host, self.port, type(err).__name__, err,
+            )
             self._device = None
             return False
 
@@ -82,7 +109,7 @@ class FireTVClient:
             return None
 
     async def get_state(self) -> dict[str, Any]:
-        """Get full device state in ONE ADB call. ~100ms."""
+        """Get device state in ONE ADB call."""
         result = await self._shell(
             "dumpsys power | grep -E 'Display Power|mWakefulness' ; "
             "dumpsys activity activities | grep mResumedActivity ; "
@@ -93,49 +120,25 @@ class FireTVClient:
 
         screen_on = "Display Power: state=ON" in result or "Awake" in result
 
-        # Try mResumedActivity first (more reliable)
         app_package = None
         match = _RE_RESUMED.search(result)
         if match:
             app_package = match.group(1)
         else:
-            # Fallback to mCurrentFocus
             match = _RE_CURRENT_APP.search(result)
             if match:
-                pkg = match.group(1)
-                # Clean up: remove activity name after /
-                app_package = pkg.split("/")[0]
+                app_package = match.group(1).split("/")[0]
 
         return {"screen_on": screen_on, "app_package": app_package}
 
-    async def get_volume_info(self) -> dict[str, Any]:
-        """Get volume level and mute state."""
-        result = await self._shell(
-            "dumpsys audio | grep -A5 STREAM_MUSIC"
-        )
-        if not result:
-            return {"volume": 0, "muted": False}
-
-        volume = 0
-        muted = False
-        m = _RE_VOLUME.search(result)
-        if m:
-            volume = int(m.group(1))
-        m = _RE_MUTED.search(result)
-        if m:
-            muted = m.group(1).lower() == "true"
-        return {"volume": volume, "muted": muted}
-
     async def screenshot(self) -> bytes | None:
-        """Take a screenshot. Returns PNG bytes at native resolution (16:9)."""
+        """Take screenshot. Returns PNG bytes at native 16:9 resolution."""
         return await self._shell("exec-out screencap -p", binary=True)
 
     async def send_key(self, key: str) -> None:
-        """Send a key event (HOME, BACK, MEDIA_PLAY_PAUSE, etc.)."""
         await self._shell(f"input keyevent {key}")
 
     async def launch_app(self, package: str) -> None:
-        """Launch an app by package name."""
         await self._shell(
             f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
         )

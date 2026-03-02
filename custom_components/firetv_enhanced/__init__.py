@@ -18,6 +18,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client = FireTVClient(
         host=entry.data[CONF_HOST],
         port=entry.data.get(CONF_PORT, DEFAULT_PORT),
+        hass_config_dir=hass.config.config_dir,
     )
 
     if not await client.connect():
@@ -31,7 +32,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         screenshot_interval=entry.options.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
     )
 
-    # Load custom app mappings from options
     custom_apps = entry.options.get("custom_apps", {})
     if custom_apps:
         coordinator.set_custom_apps(custom_apps)

@@ -25,12 +25,14 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
             name = user_input.get(CONF_NAME, f"Fire TV {host}")
 
-            # Test connection
-            client = FireTVClient(host, port)
-            if await client.connect():
+            # Pass HA config dir so the ADB key persists
+            config_dir = self.hass.config.config_dir
+            client = FireTVClient(host, port, hass_config_dir=config_dir)
+
+            # 30s timeout: user needs time to approve on TV
+            if await client.connect(timeout=30.0):
                 await client.disconnect()
 
-                # Prevent duplicates
                 await self.async_set_unique_id(f"{host}:{port}")
                 self._abort_if_unique_id_configured()
 
