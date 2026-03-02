@@ -39,27 +39,22 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._custom_apps: dict[str, str] = {}
 
     def set_custom_apps(self, apps: dict[str, str]) -> None:
-        """Add user-defined app name mappings."""
         self._custom_apps = apps
 
     def get_app_name(self, package: str | None) -> str:
-        """Resolve package name to friendly name."""
         if not package:
             return "Off"
-        # User custom names take priority
         if package in self._custom_apps:
             return self._custom_apps[package]
         info = APP_MAP.get(package)
         if info:
             return info["name"]
-        # Make unknown packages readable: com.example.app → Example App
         parts = package.split(".")
         if len(parts) >= 3:
             return parts[-1].replace("_", " ").title()
         return package
 
     def get_app_icon(self, package: str | None) -> str:
-        """Get icon for package."""
         if not package:
             return "mdi:television-off"
         info = APP_MAP.get(package)
@@ -72,30 +67,46 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not connected:
                 raise UpdateFailed("Cannot connect to Fire TV")
 
-        # Get state (screen + current app) in one call
+        # State (screen + app) in one call
         state = await self.client.get_state()
         if state is None:
             raise UpdateFailed("No response from Fire TV")
 
         package = state.get("app_package")
+        screen_on = state.get("screen_on", False)
 
-        data = {
-            "screen_on": state.get("screen_on", False),
+        data: dict[str, Any] = {
+            "screen_on": screen_on,
             "app_package": package,
             "app_name": self.get_app_name(package),
             "app_icon": self.get_app_icon(package),
+            "playback_state": "idle",
+            "media_title": None,
+            "volume": 50,
+            "muted": False,
         }
 
-        # Screenshot: only take if screen is on, at configured interval
-        if self._screenshot_interval > 0 and data["screen_on"]:
+        # Media info + volume (only when screen is on and not on home/screensaver)
+        if screen_on and package not in (
+            "com.amazon.tv.launcher", "com.amazon.firetv.screensaver", None
+        ):
+            media = await self.client.get_media_info()
+            data["playback_state"] = media.get("playback_state", "idle")
+            data["media_title"] = media.get("media_title")
+
+            vol = await self.client.get_volume()
+            data["volume"] = vol.get("volume", 50)
+            data["muted"] = vol.get("muted", False)
+
+        # Screenshot
+        if self._screenshot_interval > 0 and screen_on:
             self._screenshot_counter += 1
-            polls_per_screenshot = max(
-                1, self._screenshot_interval // (self.update_interval.total_seconds() or 5)
-            )
-            if self._screenshot_counter >= polls_per_screenshot:
+            interval = self.update_interval.total_seconds() or 5
+            polls_needed = max(1, int(self._screenshot_interval / interval))
+            if self._screenshot_counter >= polls_needed:
                 self._screenshot_counter = 0
                 img = await self.client.screenshot()
-                if img and len(img) > 100:  # Valid PNG is always > 100 bytes
+                if img and len(img) > 100:
                     self.screenshot_data = img
 
         return data

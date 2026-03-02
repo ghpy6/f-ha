@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import FireTVCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -26,6 +29,7 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
     _attr_has_entity_name = True
     _attr_name = "Screen"
     _attr_icon = "mdi:monitor-screenshot"
+    _attr_frame_interval = 10
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         CoordinatorEntity.__init__(self, coordinator)
@@ -42,5 +46,12 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return the latest screenshot."""
-        return self.coordinator.screenshot_data
+        """Return the latest screenshot as PNG."""
+        data = self.coordinator.screenshot_data
+        if data and len(data) > 100:
+            # Verify it's actually a PNG
+            if data[:4] == b'\x89PNG':
+                return data
+            _LOGGER.debug("Screenshot data is not valid PNG (%d bytes, header: %s)",
+                         len(data), data[:8].hex())
+        return None
