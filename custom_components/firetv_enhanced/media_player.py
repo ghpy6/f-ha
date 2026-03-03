@@ -11,6 +11,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -52,12 +53,12 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_media_player"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": entry.data.get(CONF_NAME, "Fire TV"),
-            "manufacturer": "Amazon",
-            "model": "Fire TV",
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.data.get(CONF_NAME, "Fire TV"),
+            manufacturer="Amazon",
+            model="Fire TV Stick",
+        )
 
     @property
     def state(self) -> MediaPlayerState:
