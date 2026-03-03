@@ -3,21 +3,25 @@
     "step": {
       "user": {
         "title": "Set up your Fire TV",
-        "description": "How to find your Fire TV IP address:\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\nHow to enable ADB Debugging:\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nAfter clicking Submit, look at your TV screen, approve the USB debugging prompt within 30 seconds.\n\nBoth devices must be on the same Wi-Fi network.",
+        "description": "Enter your Fire TV connection details below.\n\n**Finding your IP address:**\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\n**Enabling ADB Debugging:**\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nBoth devices must be on the same Wi-Fi network.",
         "data": {
           "host": "Fire TV IP Address",
           "port": "ADB Port",
           "name": "Device Name"
         },
         "data_description": {
-          "host": "Example: 192.168.1.100 (found at Settings \u2192 My Fire TV \u2192 About \u2192 Network)",
+          "host": "Example: 192.168.1.100",
           "port": "Default is 5555, only change if you modified it",
           "name": "Friendly name shown on your dashboard"
         }
+      },
+      "confirm_tv": {
+        "title": "Approve connection on your TV",
+        "description": "Almost there! When you click **Submit** below, Home Assistant will try to connect to your Fire TV.\n\n**Important:** A USB debugging prompt will appear on your TV screen. You must approve it within 30 seconds using your Fire TV remote.\n\nMake sure your TV is on and you have the remote ready, then click Submit."
       }
     },
     "error": {
-      "cannot_connect": "Could not connect. Check the IP address is correct, ADB Debugging is enabled, and approve the connection prompt on your TV screen. You have 30 seconds to approve after clicking Submit."
+      "cannot_connect": "Connection failed. Make sure you approved the prompt on your TV screen within 30 seconds. Also verify the IP address is correct and ADB Debugging is enabled. Click Submit to try again."
     },
     "abort": {
       "already_configured": "This Fire TV is already configured."
@@ -26,25 +30,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "Polling Settings",
-        "description": "Control how often the integration checks your Fire TV for updates.",
+        "title": "Fire TV Enhanced Settings",
+        "description": "Configure polling intervals and customize how app names appear on your dashboard. Changes are saved automatically without needing to re-approve on your TV.",
         "data": {
           "scan_interval": "App detection interval",
-          "screenshot_interval": "Screenshot capture interval"
-        },
-        "data_description": {
-          "scan_interval": "How often to check which app is running (lower = faster updates, higher CPU)",
-          "screenshot_interval": "How often to capture a new screenshot of the screen"
-        }
-      },
-      "custom_apps": {
-        "title": "Custom App Names",
-        "description": "Rename apps that show incorrectly on your dashboard. Use the App Package sensor to find the package name, then add one entry per line.\n\nFormat: package.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch",
-        "data": {
+          "screenshot_interval": "Screenshot capture interval",
           "custom_apps_text": "Custom app names"
         },
         "data_description": {
-          "custom_apps_text": "One per line: package.name = Display Name"
+          "scan_interval": "How often to check which app is running (lower = faster, more CPU usage)",
+          "screenshot_interval": "How often to capture a new screenshot of the Fire TV screen",
+          "custom_apps_text": "One entry per line using the format: package.name = Display Name\nCheck the App Package sensor to find package names.\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch"
         }
       }
     }
