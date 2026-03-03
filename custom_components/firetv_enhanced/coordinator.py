@@ -14,9 +14,15 @@ from .const import APP_MAP, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, 
 
 _LOGGER = logging.getLogger(__name__)
 
+# Non-launchable packages to exclude from source list
+_SKIP_SOURCES = {
+    "com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
+    "com.amazon.tv.settings", "com.amazon.tv.notificationcenter",
+}
+
 
 class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Polls Fire TV state and screenshots."""
+    """Polls Fire TV state, screenshots, and manages app discovery."""
 
     def __init__(
         self,
@@ -25,6 +31,7 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         name: str,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         screenshot_interval: int = DEFAULT_SCREENSHOT_INTERVAL,
+        cec_enabled: bool = True,
     ) -> None:
         super().__init__(
             hass,
@@ -34,27 +41,55 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.client = client
         self.screenshot_data: bytes | None = None
+        self.cec_enabled = cec_enabled
+
         self._screenshot_interval = screenshot_interval
         self._screenshot_counter = 0
         self._custom_apps: dict[str, str] = {}
+        self._discovered_packages: list[str] = []
+        self._discovery_done = False
+        self._update_count = 0
+
+    # --- App name management ---
 
     def set_custom_apps(self, apps: dict[str, str]) -> None:
         self._custom_apps = apps
 
-    def _get_merged_apps(self) -> dict[str, dict[str, str]]:
-        merged = dict(APP_MAP)
+    @property
+    def discovered_packages(self) -> list[str]:
+        return self._discovered_packages
+
+    def _build_full_app_map(self) -> dict[str, dict[str, str]]:
+        """Build complete app map: built-in + discovered + custom overrides."""
+        full: dict[str, dict[str, str]] = {}
+
+        # 1. Built-in known apps
+        full.update(APP_MAP)
+
+        # 2. Discovered apps (auto-generate name from package)
+        for pkg in self._discovered_packages:
+            if pkg not in full:
+                parts = pkg.split(".")
+                name = parts[-1].replace("_", " ").title() if len(parts) >= 2 else pkg
+                full[pkg] = {"name": name, "icon": "mdi:application"}
+
+        # 3. Custom overrides win
         for pkg, name in self._custom_apps.items():
-            merged[pkg] = {"name": name, "icon": "mdi:application"}
-        return merged
+            if pkg in full:
+                full[pkg] = {"name": name, "icon": full[pkg].get("icon", "mdi:application")}
+            else:
+                full[pkg] = {"name": name, "icon": "mdi:application"}
+
+        return full
 
     def get_app_name(self, package: str | None) -> str:
         if not package:
             return "Off"
-        if package in self._custom_apps:
-            return self._custom_apps[package]
-        info = APP_MAP.get(package)
+        full = self._build_full_app_map()
+        info = full.get(package)
         if info:
             return info["name"]
+        # Fallback for packages not in any map
         parts = package.split(".")
         if len(parts) >= 3:
             return parts[-1].replace("_", " ").title()
@@ -63,27 +98,51 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_app_icon(self, package: str | None) -> str:
         if not package:
             return "mdi:television-off"
-        info = APP_MAP.get(package)
+        full = self._build_full_app_map()
+        info = full.get(package)
         return info["icon"] if info else "mdi:application"
 
     def get_source_list(self) -> list[str]:
-        merged = self._get_merged_apps()
-        skip = {"com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
-                "com.amazon.tv.settings", "com.amazon.tv.notificationcenter"}
-        return sorted(v["name"] for k, v in merged.items() if k not in skip)
+        """All launchable apps: built-in + discovered + custom."""
+        full = self._build_full_app_map()
+        return sorted(
+            v["name"] for k, v in full.items() if k not in _SKIP_SOURCES
+        )
 
     def get_package_for_source(self, source: str) -> str | None:
-        merged = self._get_merged_apps()
-        for pkg, info in merged.items():
+        full = self._build_full_app_map()
+        for pkg, info in full.items():
             if info["name"] == source:
                 return pkg
         return None
+
+    # --- Polling ---
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self.client.connected:
             connected = await self.client.connect()
             if not connected:
                 raise UpdateFailed("Cannot connect to Fire TV")
+
+        # Run app discovery once on first successful connection
+        if not self._discovery_done:
+            try:
+                self._discovered_packages = await self.client.discover_apps()
+                self._discovery_done = True
+                _LOGGER.info(
+                    "Discovered %d installed apps", len(self._discovered_packages)
+                )
+            except Exception as err:
+                _LOGGER.debug("App discovery failed: %s", err)
+
+        # Re-discover every ~100 polls (~8 min at 5s interval)
+        self._update_count += 1
+        if self._update_count >= 100:
+            self._update_count = 0
+            try:
+                self._discovered_packages = await self.client.discover_apps()
+            except Exception:
+                pass
 
         state = await self.client.get_state()
         if state is None:
@@ -108,7 +167,7 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["playback_state"] = media.get("playback_state", "idle")
             data["media_title"] = media.get("media_title")
 
-        # Screenshot at configured interval
+        # Screenshot
         if self._screenshot_interval > 0 and screen_on:
             self._screenshot_counter += 1
             interval = self.update_interval.total_seconds() or 5

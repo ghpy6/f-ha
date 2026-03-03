@@ -1,0 +1,46 @@
+launch_app:
+  name: Launch App
+  description: Launch an app on the Fire TV by package name.
+  fields:
+    entity_id:
+      name: Entity
+      description: The Fire TV media player entity.
+      required: true
+      selector:
+        entity:
+          integration: firetv_enhanced
+          domain: media_player
+    package:
+      name: Package Name
+      description: "Android package name (e.g. com.netflix.ninja)"
+      required: true
+      example: "com.netflix.ninja"
+      selector:
+        text:
+
+send_notification:
+  name: Send Notification
+  description: Show a notification banner on the Fire TV screen.
+  fields:
+    entity_id:
+      name: Entity
+      description: The Fire TV media player entity.
+      required: true
+      selector:
+        entity:
+          integration: firetv_enhanced
+          domain: media_player
+    title:
+      name: Title
+      description: Notification title text.
+      required: true
+      example: "Home Assistant"
+      selector:
+        text:
+    message:
+      name: Message
+      description: Notification message body.
+      required: true
+      example: "Dinner is ready!"
+      selector:
+        text:

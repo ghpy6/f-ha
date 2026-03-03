@@ -21,8 +21,9 @@ _RE_MEDIA_STATE = re.compile(r"state=PlaybackState\{state=(\d+)")
 _RE_MEDIA_TITLE = re.compile(r"description=.*?title=(.*?)(?:,|$)", re.DOTALL)
 
 # Numeric keycodes (always reliable on Fire TV)
-_KEY_WAKEUP = 224
-_KEY_SLEEP = 223
+_KEY_POWER = 26       # Triggers HDMI-CEC power to TV
+_KEY_WAKEUP = 224     # Wake Fire TV only
+_KEY_SLEEP = 223      # Sleep Fire TV only
 _KEY_PLAY = 126
 _KEY_PAUSE = 127
 _KEY_PLAY_PAUSE = 85
@@ -36,6 +37,18 @@ PLAYBACK_STATES = {
     0: "none", 1: "stopped", 2: "paused", 3: "playing",
     4: "fast_forwarding", 5: "rewinding", 6: "buffering",
     7: "error", 8: "connecting",
+}
+
+# System packages to exclude from discovery
+_SYSTEM_PREFIXES = (
+    "com.amazon.", "com.android.", "android", "com.svox.",
+    "com.google.android.inputmethod", "com.google.android.tv.remote",
+)
+_SYSTEM_EXACT = {
+    "com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
+    "com.amazon.tv.settings", "com.amazon.tv.notificationcenter",
+    "com.amazon.hedwig", "com.amazon.venezia", "com.amazon.cardinal",
+    "com.amazon.firebat",
 }
 
 
@@ -133,6 +146,8 @@ class FireTVClient:
         """Send a keyevent by numeric code."""
         await self._shell(f"input keyevent {keycode}")
 
+    # --- State & media info ---
+
     async def get_state(self) -> dict[str, Any]:
         """Get device state in ONE ADB call."""
         result = await self._shell(
@@ -178,32 +193,76 @@ class FireTVClient:
 
         return info
 
-    async def screenshot(self) -> bytes | None:
-        """Take screenshot via base64 encoding (avoids binary corruption).
+    # --- Screenshot ---
 
-        ADB shell protocol corrupts raw binary by converting \\n to \\r\\n.
-        Encoding as base64 on the device produces clean ASCII text that
-        transfers perfectly, then we decode it back to PNG bytes.
-        """
+    async def screenshot(self) -> bytes | None:
+        """Take screenshot via base64 encoding (avoids binary corruption)."""
         result = await self._shell("screencap -p | base64 2>/dev/null")
         if not result or len(result) < 100:
-            _LOGGER.debug("Screenshot base64 returned empty")
             return None
 
         try:
             data = base64.b64decode(result.strip())
-        except Exception as err:
-            _LOGGER.debug("Screenshot base64 decode failed: %s", err)
+        except Exception:
             return None
 
         if data[:4] != b'\x89PNG':
-            _LOGGER.debug(
-                "Screenshot not valid PNG (%d bytes, header: %s)",
-                len(data), data[:8].hex(),
-            )
             return None
 
         return data
+
+    # --- App discovery ---
+
+    async def discover_apps(self) -> list[str]:
+        """Get list of installed third-party app packages.
+
+        Returns only user-installed apps, filtering out Amazon system
+        packages and Android internals.
+        """
+        result = await self._shell("pm list packages -3 2>/dev/null")
+        if not result:
+            return []
+
+        packages = []
+        for line in result.strip().splitlines():
+            line = line.strip()
+            if line.startswith("package:"):
+                pkg = line[8:].strip()
+                if not pkg:
+                    continue
+                # Filter out system-like packages
+                if pkg in _SYSTEM_EXACT:
+                    continue
+                if any(pkg.startswith(p) for p in _SYSTEM_PREFIXES):
+                    continue
+                packages.append(pkg)
+
+        _LOGGER.debug("Discovered %d third-party apps", len(packages))
+        return sorted(packages)
+
+    # --- Notifications ---
+
+    async def send_notification(self, title: str, message: str) -> bool:
+        """Send a notification banner to the Fire TV screen.
+
+        Uses Android's notification system. On Fire TV, this shows
+        as a heads-up banner that auto-dismisses after a few seconds.
+        """
+        # Escape quotes for shell
+        safe_title = title.replace('"', '\\"').replace("'", "\\'")
+        safe_msg = message.replace('"', '\\"').replace("'", "\\'")
+
+        result = await self._shell(
+            f'cmd notification post -S bigtext -t "{safe_title}" '
+            f'"firetv_ha_{id(self)}" "{safe_msg}"'
+        )
+
+        if result is not None:
+            _LOGGER.debug("Notification sent: %s — %s", title, message)
+            return True
+
+        _LOGGER.warning("Failed to send notification")
+        return False
 
     # --- Media controls ---
 
@@ -227,10 +286,20 @@ class FireTVClient:
 
     # --- Power ---
 
-    async def turn_on(self) -> None:
+    async def turn_on(self, cec: bool = False) -> None:
+        """Wake Fire TV. If cec=True, also send POWER to wake the TV."""
         await self._key(_KEY_WAKEUP)
+        if cec:
+            # Small delay to let Fire TV wake first, then CEC wakes TV
+            await asyncio.sleep(0.5)
+            await self._key(_KEY_POWER)
 
-    async def turn_off(self) -> None:
+    async def turn_off(self, cec: bool = False) -> None:
+        """Sleep Fire TV. If cec=True, also send POWER to standby the TV."""
+        if cec:
+            # Send POWER first (CEC standby to TV), then sleep Fire TV
+            await self._key(_KEY_POWER)
+            await asyncio.sleep(0.5)
         await self._key(_KEY_SLEEP)
 
     # --- Navigation ---

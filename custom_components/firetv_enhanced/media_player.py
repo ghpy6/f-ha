@@ -34,7 +34,7 @@ async def async_setup_entry(
 
 
 class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity):
-    """Fire TV media player."""
+    """Fire TV media player with CEC TV power support."""
 
     _attr_has_entity_name = True
     _attr_name = None
@@ -91,9 +91,7 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         app = self.app_id
         if not app:
             return None
-        if app in MUSIC_APPS:
-            return MediaType.MUSIC
-        return MediaType.VIDEO
+        return MediaType.MUSIC if app in MUSIC_APPS else MediaType.VIDEO
 
     @property
     def app_id(self) -> str | None:
@@ -118,11 +116,11 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         return "mdi:television"
 
     async def async_turn_on(self) -> None:
-        await self.coordinator.client.turn_on()
+        await self.coordinator.client.turn_on(cec=self.coordinator.cec_enabled)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
-        await self.coordinator.client.turn_off()
+        await self.coordinator.client.turn_off(cec=self.coordinator.cec_enabled)
         await self.coordinator.async_request_refresh()
 
     async def async_media_play(self) -> None:

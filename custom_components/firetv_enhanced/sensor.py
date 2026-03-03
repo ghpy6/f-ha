@@ -51,7 +51,7 @@ class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
 
 
 class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the raw package name. Use this to find package names for custom app names."""
+    """Shows the raw package name. Use to find names for custom app mapping."""
 
     _attr_has_entity_name = True
     _attr_name = "App Package"

@@ -8,6 +8,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -26,11 +27,10 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
-        """Initialize."""
         self._user_data: dict = {}
 
     async def async_step_user(self, user_input=None):
-        """Step 1: Enter device details."""
+        """Step 1: Enter connection details."""
         errors = {}
 
         if user_input is not None:
@@ -52,7 +52,7 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_confirm_tv(self, user_input=None):
-        """Step 2: Warn user about TV prompt, then connect."""
+        """Step 2: Warn about TV prompt, then connect."""
         errors = {}
 
         if user_input is not None:
@@ -65,17 +65,11 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if await client.connect(timeout=30.0):
                 await client.disconnect()
-
                 await self.async_set_unique_id(f"{host}:{port}")
                 self._abort_if_unique_id_configured()
-
                 return self.async_create_entry(
                     title=name,
-                    data={
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_NAME: name,
-                    },
+                    data={CONF_HOST: host, CONF_PORT: port, CONF_NAME: name},
                 )
             else:
                 errors["base"] = "cannot_connect"
@@ -109,8 +103,9 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
             new_options["screenshot_interval"] = int(
                 user_input.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL)
             )
+            new_options["cec_enabled"] = user_input.get("cec_enabled", True)
 
-            # Parse custom apps text → dict
+            # Parse custom apps
             custom_apps = {}
             raw = user_input.get("custom_apps_text", "")
             for line in raw.strip().splitlines():
@@ -127,7 +122,6 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
 
             return self.async_create_entry(title="", data=new_options)
 
-        # Load current values
         opts = self._config_entry.options
         current_custom = opts.get("custom_apps", {})
         custom_text = opts.get("custom_apps_text", "")
@@ -155,6 +149,10 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                     unit_of_measurement="seconds",
                     mode=NumberSelectorMode.BOX,
                 )),
+                vol.Optional(
+                    "cec_enabled",
+                    default=opts.get("cec_enabled", True),
+                ): BooleanSelector(),
                 vol.Optional(
                     "custom_apps_text",
                     default=custom_text,

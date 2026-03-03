@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up your Fire TV",
-        "description": "Enter your Fire TV connection details below.\n\n**Finding your IP address:**\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\n**Enabling ADB Debugging:**\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nBoth devices must be on the same Wi-Fi network.",
+        "description": "Enter your Fire TV connection details below.\n\n**How to find your IP address:**\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\n**How to enable ADB Debugging:**\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nBoth devices must be on the same Wi-Fi network.",
         "data": {
           "host": "Fire TV IP Address",
           "port": "ADB Port",
@@ -12,16 +12,16 @@
         "data_description": {
           "host": "Example: 192.168.1.100",
           "port": "Default is 5555, only change if you modified it",
-          "name": "Friendly name shown on your dashboard"
+          "name": "A friendly name for your dashboard"
         }
       },
       "confirm_tv": {
-        "title": "Approve connection on your TV",
-        "description": "Almost there! When you click **Submit** below, Home Assistant will try to connect to your Fire TV.\n\n**Important:** A USB debugging prompt will appear on your TV screen. You must approve it within 30 seconds using your Fire TV remote.\n\nMake sure your TV is on and you have the remote ready, then click Submit."
+        "title": "Approve on your TV",
+        "description": "When you click **Submit**, a USB debugging prompt will appear on your Fire TV screen.\n\n**You must do these two things:**\n1. Check the box **\"Always allow from this computer\"**\n2. Select **Allow** using your Fire TV remote\n\nYou have 30 seconds to approve. Make sure your TV is on and remote is nearby.\n\n**Important:** Checking \"Always allow\" ensures you won't be prompted again when saving settings later."
       }
     },
     "error": {
-      "cannot_connect": "Connection failed. Make sure you approved the prompt on your TV screen within 30 seconds. Also verify the IP address is correct and ADB Debugging is enabled. Click Submit to try again."
+      "cannot_connect": "Connection failed. Make sure you approved the prompt on your TV within 30 seconds, the IP is correct, and ADB Debugging is enabled. Click Submit to try again."
     },
     "abort": {
       "already_configured": "This Fire TV is already configured."
@@ -31,16 +31,52 @@
     "step": {
       "init": {
         "title": "Fire TV Enhanced Settings",
-        "description": "Configure polling intervals and customize how app names appear on your dashboard. Changes are saved automatically without needing to re-approve on your TV.",
+        "description": "Saving these settings will briefly reconnect to your Fire TV. No TV approval is needed if you checked \"Always allow\" during setup.",
         "data": {
           "scan_interval": "App detection interval",
           "screenshot_interval": "Screenshot capture interval",
+          "cec_enabled": "Control TV power via HDMI-CEC",
           "custom_apps_text": "Custom app names"
         },
         "data_description": {
-          "scan_interval": "How often to check which app is running (lower = faster, more CPU usage)",
-          "screenshot_interval": "How often to capture a new screenshot of the Fire TV screen",
-          "custom_apps_text": "One entry per line using the format: package.name = Display Name\nCheck the App Package sensor to find package names.\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch"
+          "scan_interval": "How often to check which app is running (lower = faster updates, higher CPU)",
+          "screenshot_interval": "How often to capture a new screenshot of the screen",
+          "cec_enabled": "When enabled, turning Fire TV on/off will also turn your TV on/off via HDMI-CEC. Requires CEC to be enabled on both your TV and Fire TV (Samsung calls it Anynet+)",
+          "custom_apps_text": "Rename apps that show with incorrect names. One per line:\npackage.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch\n\nTip: Check the App Package sensor to find package names"
+        }
+      }
+    }
+  },
+  "services": {
+    "launch_app": {
+      "name": "Launch App",
+      "description": "Launch an app on the Fire TV by package name.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Fire TV media player entity."
+        },
+        "package": {
+          "name": "Package",
+          "description": "Android package name (e.g. com.netflix.ninja)."
+        }
+      }
+    },
+    "send_notification": {
+      "name": "Send Notification",
+      "description": "Show a notification banner on the Fire TV screen.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Fire TV media player entity."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Notification title."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Notification message body."
         }
       }
     }
