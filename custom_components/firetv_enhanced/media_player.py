@@ -34,7 +34,7 @@ async def async_setup_entry(
 
 
 class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity):
-    """Fire TV media player with CEC TV power support."""
+    """Fire TV media player with live screenshot preview."""
 
     _attr_has_entity_name = True
     _attr_name = None
@@ -81,6 +81,17 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         return MediaPlayerState.ON
 
     @property
+    def entity_picture(self) -> str | None:
+        """Show live Fire TV screenshot in the media player card."""
+        if self.coordinator.screenshot_data and self.coordinator.data:
+            if self.coordinator.data.get("screen_on"):
+                # Use the camera entity's proxy URL for the screenshot
+                camera_id = f"camera.{DOMAIN}_{self._entry.entry_id}_camera"
+                # Simpler: use the camera proxy endpoint
+                return f"/api/camera_proxy/{camera_id}"
+        return None
+
+    @property
     def media_title(self) -> str | None:
         if self.coordinator.data:
             return self.coordinator.data.get("media_title")
@@ -116,11 +127,11 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         return "mdi:television"
 
     async def async_turn_on(self) -> None:
-        await self.coordinator.client.turn_on(cec=self.coordinator.cec_enabled)
+        await self.coordinator.client.turn_on()
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
-        await self.coordinator.client.turn_off(cec=self.coordinator.cec_enabled)
+        await self.coordinator.client.turn_off()
         await self.coordinator.async_request_refresh()
 
     async def async_media_play(self) -> None:

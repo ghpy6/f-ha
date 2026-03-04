@@ -35,48 +35,12 @@
         "data": {
           "scan_interval": "App detection interval",
           "screenshot_interval": "Screenshot capture interval",
-          "cec_enabled": "Control TV power via HDMI-CEC",
           "custom_apps_text": "Custom app names"
         },
         "data_description": {
           "scan_interval": "How often to check which app is running (lower = faster updates, higher CPU)",
           "screenshot_interval": "How often to capture a new screenshot of the screen",
-          "cec_enabled": "When enabled, turning Fire TV on/off will also turn your TV on/off via HDMI-CEC. Requires CEC to be enabled on both your TV and Fire TV (Samsung calls it Anynet+)",
           "custom_apps_text": "Rename apps that show with incorrect names. One per line:\npackage.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch\n\nTip: Check the App Package sensor to find package names"
-        }
-      }
-    }
-  },
-  "services": {
-    "launch_app": {
-      "name": "Launch App",
-      "description": "Launch an app on the Fire TV by package name.",
-      "fields": {
-        "entity_id": {
-          "name": "Entity",
-          "description": "The Fire TV media player entity."
-        },
-        "package": {
-          "name": "Package",
-          "description": "Android package name (e.g. com.netflix.ninja)."
-        }
-      }
-    },
-    "send_notification": {
-      "name": "Send Notification",
-      "description": "Show a notification banner on the Fire TV screen.",
-      "fields": {
-        "entity_id": {
-          "name": "Entity",
-          "description": "The Fire TV media player entity."
-        },
-        "title": {
-          "name": "Title",
-          "description": "Notification title."
-        },
-        "message": {
-          "name": "Message",
-          "description": "Notification message body."
         }
       }
     }

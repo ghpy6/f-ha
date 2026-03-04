@@ -19,40 +19,9 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SENSOR, Platform.CAMERA]
 
-SERVICE_LAUNCH_APP = "launch_app"
-SERVICE_SEND_NOTIFICATION = "send_notification"
 
-LAUNCH_APP_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.entity_id,
-    vol.Required("package"): cv.string,
-})
-
-SEND_NOTIFICATION_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.entity_id,
-    vol.Required("title"): cv.string,
-    vol.Required("message"): cv.string,
-})
-
-
-def _get_coordinator_by_entity(
-    hass: HomeAssistant, entity_id: str
-) -> FireTVCoordinator | None:
-    """Find the coordinator that owns a given entity_id."""
-    for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
-        if isinstance(coordinator, FireTVCoordinator):
-            # Check if entity_id matches any entity under this coordinator
-            entity_registry = hass.data.get("entity_registry")
-            if entity_registry:
-                for entity in entity_registry.entities.get_entries_for_config_entry_id(entry_id):
-                    if entity.entity_id == entity_id:
-                        return coordinator
-            # Fallback: use first coordinator if only one exists
-            return coordinator
-    return None
-
-
-def _get_first_coordinator(hass: HomeAssistant) -> FireTVCoordinator | None:
-    """Get first available coordinator (for simple setups)."""
+def _get_coordinator(hass: HomeAssistant) -> FireTVCoordinator | None:
+    """Get the first available coordinator."""
     for coord in hass.data.get(DOMAIN, {}).values():
         if isinstance(coord, FireTVCoordinator):
             return coord
@@ -78,7 +47,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         screenshot_interval=entry.options.get(
             "screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL
         ),
-        cec_enabled=entry.options.get("cec_enabled", True),
     )
 
     custom_apps = entry.options.get("custom_apps", {})
@@ -93,47 +61,63 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
-    # Register services (only once across all entries)
-    if not hass.services.has_service(DOMAIN, SERVICE_LAUNCH_APP):
+    # Register services once
+    if not hass.services.has_service(DOMAIN, "launch_app"):
+
         async def handle_launch_app(call: ServiceCall) -> None:
-            coord = _get_first_coordinator(hass)
-            if coord:
-                await coord.client.launch_app(call.data["package"])
-                await coord.async_request_refresh()
+            """Launch an app by package name."""
+            coord = _get_coordinator(hass)
+            if not coord:
+                _LOGGER.error("No Fire TV coordinator found")
+                return
+            package = call.data["package"]
+            _LOGGER.info("Launching app: %s", package)
+            await coord.client.launch_app(package)
+            await coord.async_request_refresh()
 
         async def handle_send_notification(call: ServiceCall) -> None:
-            coord = _get_first_coordinator(hass)
-            if coord:
-                await coord.client.send_notification(
-                    call.data["title"], call.data["message"]
-                )
+            """Send a notification to Fire TV."""
+            coord = _get_coordinator(hass)
+            if not coord:
+                _LOGGER.error("No Fire TV coordinator found")
+                return
+            title = call.data["title"]
+            message = call.data["message"]
+            _LOGGER.info("Sending notification: %s — %s", title, message)
+            await coord.client.send_notification(title, message)
 
         hass.services.async_register(
-            DOMAIN, SERVICE_LAUNCH_APP, handle_launch_app, schema=LAUNCH_APP_SCHEMA
+            DOMAIN,
+            "launch_app",
+            handle_launch_app,
+            schema=vol.Schema({
+                vol.Required("package"): cv.string,
+            }),
         )
         hass.services.async_register(
-            DOMAIN, SERVICE_SEND_NOTIFICATION, handle_send_notification,
-            schema=SEND_NOTIFICATION_SCHEMA,
+            DOMAIN,
+            "send_notification",
+            handle_send_notification,
+            schema=vol.Schema({
+                vol.Required("title"): cv.string,
+                vol.Required("message"): cv.string,
+            }),
         )
+        _LOGGER.info("Registered Fire TV Enhanced services")
 
     return True
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload when user changes settings."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator: FireTVCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.client.disconnect()
-
-    # Unregister services if no entries left
     if not hass.data.get(DOMAIN):
-        hass.services.async_remove(DOMAIN, SERVICE_LAUNCH_APP)
-        hass.services.async_remove(DOMAIN, SERVICE_SEND_NOTIFICATION)
-
+        hass.services.async_remove(DOMAIN, "launch_app")
+        hass.services.async_remove(DOMAIN, "send_notification")
     return unload_ok

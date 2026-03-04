@@ -5,9 +5,6 @@ DEFAULT_PORT = 5555
 DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_SCREENSHOT_INTERVAL = 10
 
-# Built-in package → friendly name + icon.
-# Auto-discovered apps not in this map get auto-generated names.
-# Users can override any name in Options → Custom App Names.
 APP_MAP: dict[str, dict[str, str]] = {
     "com.netflix.ninja": {"name": "Netflix", "icon": "mdi:netflix"},
     "com.google.android.youtube.tv": {"name": "YouTube", "icon": "mdi:youtube"},
@@ -35,6 +32,6 @@ APP_MAP: dict[str, dict[str, str]] = {
     "com.amazon.cardinal": {"name": "App Manager", "icon": "mdi:apps"},
     "com.deezer.tv": {"name": "Deezer", "icon": "mdi:music"},
     "com.bamtechmedia.dominguez.main": {"name": "Star+", "icon": "mdi:star"},
-    "com.amazon.cloud9": {"name": "Silk Browser", "icon": "mdi:web"},
-    "com.amazon.tv.mediaplayer": {"name": "Media Player", "icon": "mdi:play-circle"},
+    "com.liskovsoft.smarttubetv.beta": {"name": "SmartTube", "icon": "mdi:youtube-tv"},
+    "com.liskovsoft.smarttubetv": {"name": "SmartTube", "icon": "mdi:youtube-tv"},
 }
