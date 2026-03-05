@@ -31,16 +31,16 @@
     "step": {
       "init": {
         "title": "Fire TV Enhanced Settings",
-        "description": "Saving these settings will briefly reconnect to your Fire TV. No TV approval is needed if you checked \"Always allow\" during setup.",
+        "description": "No TV approval needed to save settings.\n\n**Installed apps detected:**\n{app_list}\n\n\u2705 = custom name, \u2022 = auto-detected",
         "data": {
           "scan_interval": "App detection interval",
-          "screenshot_interval": "Screenshot capture interval",
-          "custom_apps_text": "Custom app names"
+          "screenshot_interval": "Screenshot interval",
+          "custom_apps_text": "Custom app name overrides"
         },
         "data_description": {
-          "scan_interval": "How often to check which app is running (lower = faster updates, higher CPU)",
-          "screenshot_interval": "How often to capture a new screenshot of the screen",
-          "custom_apps_text": "Rename apps that show with incorrect names. One per line:\npackage.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch\n\nTip: Check the App Package sensor to find package names"
+          "scan_interval": "How often to check which app is running. 1s = fastest but uses more CPU. Default: 5s",
+          "screenshot_interval": "How often to capture a screenshot. 1s = real-time but uses more bandwidth. Default: 10s",
+          "custom_apps_text": "To rename an app, copy the package name from the list above and add:\npackage.name = Your Name\n\nOne per line. Example:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch"
         }
       }
     }

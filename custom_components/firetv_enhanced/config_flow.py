@@ -17,19 +17,16 @@ from homeassistant.helpers.selector import (
 )
 
 from .adb_client import FireTVClient
-from .const import DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
+from .const import APP_MAP, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
 
 
 class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for Fire TV Enhanced."""
-
     VERSION = 1
 
     def __init__(self) -> None:
         self._user_data: dict = {}
 
     async def async_step_user(self, user_input=None):
-        """Step 1: Enter connection details."""
         errors = {}
         if user_input is not None:
             self._user_data = user_input
@@ -50,16 +47,13 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_confirm_tv(self, user_input=None):
-        """Step 2: Warn about TV prompt, then connect."""
         errors = {}
         if user_input is not None:
             host = self._user_data[CONF_HOST]
             port = self._user_data.get(CONF_PORT, DEFAULT_PORT)
             name = self._user_data.get(CONF_NAME, f"Fire TV {host}")
 
-            config_dir = self.hass.config.config_dir
-            client = FireTVClient(host, port, hass_config_dir=config_dir)
-
+            client = FireTVClient(host, port, hass_config_dir=self.hass.config.config_dir)
             if await client.connect(timeout=30.0):
                 await client.disconnect()
                 await self.async_set_unique_id(f"{host}:{port}")
@@ -84,10 +78,50 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class FireTVOptionsFlow(config_entries.OptionsFlow):
-    """Options flow — single modal."""
-
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
+
+    def _build_app_list_text(self) -> str:
+        """Build a readable list of all known apps for the description."""
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+        custom = self._config_entry.options.get("custom_apps", {})
+        lines = []
+
+        # Discovered apps
+        discovered = []
+        if coordinator and hasattr(coordinator, "discovered_packages"):
+            discovered = coordinator.discovered_packages or []
+
+        # All known packages: discovered + built-in keys
+        all_pkgs = set(discovered) | set(APP_MAP.keys())
+        # Remove non-launchable
+        skip = {"com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
+                "com.amazon.tv.settings", "com.amazon.tv.notificationcenter"}
+        all_pkgs -= skip
+
+        for pkg in sorted(all_pkgs):
+            if pkg in custom:
+                name = custom[pkg]
+                lines.append(f"  \u2705 {pkg} = {name}")
+            elif pkg in APP_MAP:
+                name = APP_MAP[pkg]["name"]
+                lines.append(f"  \u2022 {pkg} \u2192 {name}")
+            else:
+                parts = pkg.split(".")
+                auto_name = parts[-1].replace("_", " ").title() if len(parts) >= 2 else pkg
+                lines.append(f"  \u2022 {pkg} \u2192 {auto_name}")
+
+        return "\n".join(lines) if lines else "  No apps discovered yet"
+
+    def _build_custom_text_default(self) -> str:
+        """Pre-populate with current custom overrides."""
+        custom = self._config_entry.options.get("custom_apps", {})
+        stored_text = self._config_entry.options.get("custom_apps_text", "")
+        if stored_text:
+            return stored_text
+        if custom:
+            return "\n".join(f"{pkg} = {name}" for pkg, name in sorted(custom.items()))
+        return ""
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
@@ -115,12 +149,8 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=new_options)
 
         opts = self._config_entry.options
-        current_custom = opts.get("custom_apps", {})
-        custom_text = opts.get("custom_apps_text", "")
-        if not custom_text and current_custom:
-            custom_text = "\n".join(
-                f"{pkg} = {name}" for pkg, name in current_custom.items()
-            )
+        app_list = self._build_app_list_text()
+        custom_default = self._build_custom_text_default()
 
         return self.async_show_form(
             step_id="init",
@@ -129,7 +159,7 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                     "scan_interval",
                     default=opts.get("scan_interval", DEFAULT_SCAN_INTERVAL),
                 ): NumberSelector(NumberSelectorConfig(
-                    min=2, max=60, step=1,
+                    min=1, max=60, step=1,
                     unit_of_measurement="seconds",
                     mode=NumberSelectorMode.BOX,
                 )),
@@ -137,16 +167,19 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                     "screenshot_interval",
                     default=opts.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
                 ): NumberSelector(NumberSelectorConfig(
-                    min=5, max=120, step=1,
+                    min=1, max=120, step=1,
                     unit_of_measurement="seconds",
                     mode=NumberSelectorMode.BOX,
                 )),
                 vol.Optional(
                     "custom_apps_text",
-                    default=custom_text,
+                    default=custom_default,
                 ): TextSelector(TextSelectorConfig(
                     multiline=True,
                     type=TextSelectorType.TEXT,
                 )),
             }),
+            description_placeholders={
+                "app_list": app_list,
+            },
         )

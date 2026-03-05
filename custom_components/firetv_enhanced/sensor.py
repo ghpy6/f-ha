@@ -24,8 +24,6 @@ async def async_setup_entry(
 
 
 class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the friendly name of the running app."""
-
     _attr_has_entity_name = True
     _attr_name = "Current App"
     _attr_icon = "mdi:application"
@@ -33,9 +31,7 @@ class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_current_app"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-        )
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
 
     @property
     def native_value(self) -> str:
@@ -51,8 +47,6 @@ class FireTVAppSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
 
 
 class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
-    """Shows the raw package name. Use to find names for custom app mapping."""
-
     _attr_has_entity_name = True
     _attr_name = "App Package"
     _attr_icon = "mdi:package-variant"
@@ -61,9 +55,7 @@ class FireTVPackageSensor(CoordinatorEntity[FireTVCoordinator], SensorEntity):
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_app_package"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-        )
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
 
     @property
     def native_value(self) -> str | None:

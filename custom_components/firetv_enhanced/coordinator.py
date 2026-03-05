@@ -21,22 +21,11 @@ _SKIP_SOURCES = {
 
 
 class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Polls Fire TV state, screenshots, and manages app discovery."""
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        client: FireTVClient,
-        name: str,
-        scan_interval: int = DEFAULT_SCAN_INTERVAL,
-        screenshot_interval: int = DEFAULT_SCREENSHOT_INTERVAL,
-    ) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_{name}",
-            update_interval=timedelta(seconds=scan_interval),
-        )
+    def __init__(self, hass: HomeAssistant, client: FireTVClient, name: str,
+                 scan_interval: int = DEFAULT_SCAN_INTERVAL,
+                 screenshot_interval: int = DEFAULT_SCREENSHOT_INTERVAL) -> None:
+        super().__init__(hass, _LOGGER, name=f"{DOMAIN}_{name}",
+                        update_interval=timedelta(seconds=scan_interval))
         self.client = client
         self.screenshot_data: bytes | None = None
         self._screenshot_interval = screenshot_interval
@@ -76,9 +65,7 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if info:
             return info["name"]
         parts = package.split(".")
-        if len(parts) >= 3:
-            return parts[-1].replace("_", " ").title()
-        return package
+        return parts[-1].replace("_", " ").title() if len(parts) >= 3 else package
 
     def get_app_icon(self, package: str | None) -> str:
         if not package:
@@ -100,11 +87,9 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         if not self.client.connected:
-            connected = await self.client.connect()
-            if not connected:
+            if not await self.client.connect():
                 raise UpdateFailed("Cannot connect to Fire TV")
 
-        # App discovery: once at start, then every ~100 polls
         if not self._discovery_done:
             try:
                 self._discovered_packages = await self.client.discover_apps()

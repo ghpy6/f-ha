@@ -1,7 +1,7 @@
 {
   "domain": "firetv_enhanced",
   "name": "Fire TV Enhanced",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],

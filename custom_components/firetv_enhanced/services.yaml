@@ -12,7 +12,7 @@ launch_app:
 
 send_notification:
   name: Send Notification
-  description: Show a notification banner on the Fire TV screen that auto-dismisses after a few seconds.
+  description: Show a notification banner on the Fire TV screen.
   fields:
     title:
       name: Title

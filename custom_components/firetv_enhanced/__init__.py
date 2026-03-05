@@ -16,12 +16,10 @@ from .const import DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTER
 from .coordinator import FireTVCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
 PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SENSOR, Platform.CAMERA]
 
 
 def _get_coordinator(hass: HomeAssistant) -> FireTVCoordinator | None:
-    """Get the first available coordinator."""
     for coord in hass.data.get(DOMAIN, {}).values():
         if isinstance(coord, FireTVCoordinator):
             return coord
@@ -29,24 +27,19 @@ def _get_coordinator(hass: HomeAssistant) -> FireTVCoordinator | None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Fire TV Enhanced from a config entry."""
     client = FireTVClient(
         host=entry.data[CONF_HOST],
         port=entry.data.get(CONF_PORT, DEFAULT_PORT),
         hass_config_dir=hass.config.config_dir,
     )
-
     if not await client.connect():
         return False
 
     coordinator = FireTVCoordinator(
-        hass,
-        client,
+        hass, client,
         name=entry.data.get(CONF_NAME, "firetv"),
         scan_interval=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL),
-        screenshot_interval=entry.options.get(
-            "screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL
-        ),
+        screenshot_interval=entry.options.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
     )
 
     custom_apps = entry.options.get("custom_apps", {})
@@ -63,47 +56,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register services once
     if not hass.services.has_service(DOMAIN, "launch_app"):
-
         async def handle_launch_app(call: ServiceCall) -> None:
-            """Launch an app by package name."""
             coord = _get_coordinator(hass)
-            if not coord:
-                _LOGGER.error("No Fire TV coordinator found")
-                return
-            package = call.data["package"]
-            _LOGGER.info("Launching app: %s", package)
-            await coord.client.launch_app(package)
-            await coord.async_request_refresh()
+            if coord:
+                await coord.client.launch_app(call.data["package"])
+                await coord.async_request_refresh()
 
         async def handle_send_notification(call: ServiceCall) -> None:
-            """Send a notification to Fire TV."""
             coord = _get_coordinator(hass)
-            if not coord:
-                _LOGGER.error("No Fire TV coordinator found")
-                return
-            title = call.data["title"]
-            message = call.data["message"]
-            _LOGGER.info("Sending notification: %s — %s", title, message)
-            await coord.client.send_notification(title, message)
+            if coord:
+                await coord.client.send_notification(call.data["title"], call.data["message"])
 
         hass.services.async_register(
-            DOMAIN,
-            "launch_app",
-            handle_launch_app,
-            schema=vol.Schema({
-                vol.Required("package"): cv.string,
-            }),
+            DOMAIN, "launch_app", handle_launch_app,
+            schema=vol.Schema({vol.Required("package"): cv.string}),
         )
         hass.services.async_register(
-            DOMAIN,
-            "send_notification",
-            handle_send_notification,
+            DOMAIN, "send_notification", handle_send_notification,
             schema=vol.Schema({
                 vol.Required("title"): cv.string,
                 vol.Required("message"): cv.string,
             }),
         )
-        _LOGGER.info("Registered Fire TV Enhanced services")
 
     return True
 

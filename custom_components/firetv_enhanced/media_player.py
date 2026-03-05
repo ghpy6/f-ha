@@ -19,10 +19,8 @@ from .const import DOMAIN
 from .coordinator import FireTVCoordinator
 
 MUSIC_APPS = {
-    "com.spotify.tv.android",
-    "com.amazon.music.tv",
-    "com.apple.android.music",
-    "com.deezer.tv",
+    "com.spotify.tv.android", "com.amazon.music.tv",
+    "com.apple.android.music", "com.deezer.tv",
 }
 
 
@@ -34,8 +32,6 @@ async def async_setup_entry(
 
 
 class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity):
-    """Fire TV media player with live screenshot preview."""
-
     _attr_has_entity_name = True
     _attr_name = None
     _attr_supported_features = (
@@ -51,7 +47,6 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_media_player"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -65,11 +60,9 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
         data = self.coordinator.data
         if not data or not data.get("screen_on"):
             return MediaPlayerState.OFF
-
         app = data.get("app_package", "")
         if app in ("com.amazon.tv.launcher", "com.amazon.firetv.screensaver", None):
             return MediaPlayerState.IDLE
-
         playback = data.get("playback_state", "idle")
         if playback == "playing":
             return MediaPlayerState.PLAYING
@@ -77,24 +70,16 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
             return MediaPlayerState.PAUSED
         if playback == "buffering":
             return MediaPlayerState.BUFFERING
-
         return MediaPlayerState.ON
-
-    @property
-    def entity_picture(self) -> str | None:
-        """Show live Fire TV screenshot in the media player card."""
-        if self.coordinator.screenshot_data and self.coordinator.data:
-            if self.coordinator.data.get("screen_on"):
-                # Use the camera entity's proxy URL for the screenshot
-                camera_id = f"camera.{DOMAIN}_{self._entry.entry_id}_camera"
-                # Simpler: use the camera proxy endpoint
-                return f"/api/camera_proxy/{camera_id}"
-        return None
 
     @property
     def media_title(self) -> str | None:
         if self.coordinator.data:
-            return self.coordinator.data.get("media_title")
+            title = self.coordinator.data.get("media_title")
+            if title:
+                return title
+            # Show app name as title when no media title detected
+            return self.coordinator.data.get("app_name")
         return None
 
     @property

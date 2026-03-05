@@ -20,7 +20,6 @@ _RE_CURRENT_APP = re.compile(r"[{/]\s*(com\.\S+|org\.\S+|tv\.\S+|net\.\S+)")
 _RE_MEDIA_STATE = re.compile(r"state=PlaybackState\{state=(\d+)")
 _RE_MEDIA_TITLE = re.compile(r"description=.*?title=(.*?)(?:,|$)", re.DOTALL)
 
-# Numeric keycodes
 _KEY_WAKEUP = 224
 _KEY_SLEEP = 223
 _KEY_PLAY = 126
@@ -39,19 +38,16 @@ PLAYBACK_STATES = {
 }
 
 _SYSTEM_PREFIXES = (
-    "com.amazon.", "com.android.", "android", "com.svox.",
+    "com.android.", "android", "com.svox.",
     "com.google.android.inputmethod", "com.google.android.tv.remote",
 )
 _SYSTEM_EXACT = {
     "com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
     "com.amazon.tv.settings", "com.amazon.tv.notificationcenter",
-    "com.amazon.hedwig", "com.amazon.venezia", "com.amazon.cardinal",
-    "com.amazon.firebat",
 }
 
 
 def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
-    """Generate/load ADB key. BLOCKING — runs in executor only."""
     if config_dir:
         key_dir = os.path.join(config_dir, ".firetv_enhanced")
     else:
@@ -65,22 +61,16 @@ def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
 
     with open(key_path) as f:
         priv = f.read()
-
     pub = ""
     pub_path = key_path + ".pub"
     if os.path.exists(pub_path):
         with open(pub_path) as f:
             pub = f.read()
-
     return PythonRSASigner(pub, priv)
 
 
 class FireTVClient:
-    """Async ADB client optimized for Fire TV."""
-
-    def __init__(
-        self, host: str, port: int = 5555, hass_config_dir: str | None = None
-    ) -> None:
+    def __init__(self, host: str, port: int = 5555, hass_config_dir: str | None = None):
         self.host = host
         self.port = port
         self._hass_config_dir = hass_config_dir
@@ -99,25 +89,16 @@ class FireTVClient:
                 self._signer = await loop.run_in_executor(
                     None, _setup_key_sync, self._hass_config_dir
                 )
-
             self._device = AdbDeviceTcpAsync(
                 self.host, self.port, default_transport_timeout_s=timeout
             )
-
-            await self._device.connect(
-                rsa_keys=[self._signer],
-                auth_timeout_s=timeout,
-            )
-
+            await self._device.connect(rsa_keys=[self._signer], auth_timeout_s=timeout)
             await self._device.shell("echo ok")
             _LOGGER.info("Connected to Fire TV at %s:%d", self.host, self.port)
             return True
-
         except Exception as err:
-            _LOGGER.error(
-                "Failed to connect to %s:%d — %s: %s",
-                self.host, self.port, type(err).__name__, err,
-            )
+            _LOGGER.error("Failed to connect to %s:%d — %s: %s",
+                         self.host, self.port, type(err).__name__, err)
             self._device = None
             return False
 
@@ -147,7 +128,6 @@ class FireTVClient:
         )
         if not result:
             return {"screen_on": False, "app_package": None}
-
         screen_on = "Display Power: state=ON" in result or "Awake" in result
         app_package = None
         match = _RE_RESUMED.search(result)
@@ -157,7 +137,6 @@ class FireTVClient:
             match = _RE_CURRENT_APP.search(result)
             if match:
                 app_package = match.group(1).split("/")[0]
-
         return {"screen_on": screen_on, "app_package": app_package}
 
     async def get_media_info(self) -> dict[str, Any]:
@@ -167,18 +146,14 @@ class FireTVClient:
         info: dict[str, Any] = {"playback_state": "idle", "media_title": None}
         if not result:
             return info
-
         match = _RE_MEDIA_STATE.search(result)
         if match:
-            state_num = int(match.group(1))
-            info["playback_state"] = PLAYBACK_STATES.get(state_num, "unknown")
-
+            info["playback_state"] = PLAYBACK_STATES.get(int(match.group(1)), "unknown")
         match = _RE_MEDIA_TITLE.search(result)
         if match:
             title = match.group(1).strip()
             if title and title != "null":
                 info["media_title"] = title
-
         return info
 
     async def screenshot(self) -> bytes | None:
@@ -189,9 +164,7 @@ class FireTVClient:
             data = base64.b64decode(result.strip())
         except Exception:
             return None
-        if data[:4] != b'\x89PNG':
-            return None
-        return data
+        return data if data[:4] == b'\x89PNG' else None
 
     async def discover_apps(self) -> list[str]:
         result = await self._shell("pm list packages -3 2>/dev/null")
@@ -202,9 +175,7 @@ class FireTVClient:
             line = line.strip()
             if line.startswith("package:"):
                 pkg = line[8:].strip()
-                if not pkg:
-                    continue
-                if pkg in _SYSTEM_EXACT:
+                if not pkg or pkg in _SYSTEM_EXACT:
                     continue
                 if any(pkg.startswith(p) for p in _SYSTEM_PREFIXES):
                     continue
@@ -215,43 +186,20 @@ class FireTVClient:
         safe_title = title.replace('"', '\\"').replace("'", "\\'")
         safe_msg = message.replace('"', '\\"').replace("'", "\\'")
         result = await self._shell(
-            f'cmd notification post -S bigtext -t "{safe_title}" '
-            f'"ha_notify" "{safe_msg}"'
+            f'cmd notification post -S bigtext -t "{safe_title}" "ha_notify" "{safe_msg}"'
         )
         return result is not None
 
-    # Media controls
-    async def media_play(self) -> None:
-        await self._key(_KEY_PLAY)
-
-    async def media_pause(self) -> None:
-        await self._key(_KEY_PAUSE)
-
-    async def media_play_pause(self) -> None:
-        await self._key(_KEY_PLAY_PAUSE)
-
-    async def media_stop(self) -> None:
-        await self._key(_KEY_STOP)
-
-    async def media_next(self) -> None:
-        await self._key(_KEY_NEXT)
-
-    async def media_previous(self) -> None:
-        await self._key(_KEY_PREVIOUS)
-
-    # Power
-    async def turn_on(self) -> None:
-        await self._key(_KEY_WAKEUP)
-
-    async def turn_off(self) -> None:
-        await self._key(_KEY_SLEEP)
-
-    # Navigation
-    async def navigate_back(self) -> None:
-        await self._key(_KEY_BACK)
-
-    async def navigate_home(self) -> None:
-        await self._key(_KEY_HOME)
+    async def media_play(self) -> None: await self._key(_KEY_PLAY)
+    async def media_pause(self) -> None: await self._key(_KEY_PAUSE)
+    async def media_play_pause(self) -> None: await self._key(_KEY_PLAY_PAUSE)
+    async def media_stop(self) -> None: await self._key(_KEY_STOP)
+    async def media_next(self) -> None: await self._key(_KEY_NEXT)
+    async def media_previous(self) -> None: await self._key(_KEY_PREVIOUS)
+    async def turn_on(self) -> None: await self._key(_KEY_WAKEUP)
+    async def turn_off(self) -> None: await self._key(_KEY_SLEEP)
+    async def navigate_back(self) -> None: await self._key(_KEY_BACK)
+    async def navigate_home(self) -> None: await self._key(_KEY_HOME)
 
     async def launch_app(self, package: str) -> None:
         await self._shell(
