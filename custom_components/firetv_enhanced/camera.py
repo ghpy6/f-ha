@@ -1,24 +1,17 @@
-"""Camera entity for Fire TV Enhanced — serves 16:9 screenshots."""
-
+"""Camera entity for Fire TV Enhanced."""
 from __future__ import annotations
-
 from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-
 from .const import DOMAIN
 from .coordinator import FireTVCoordinator
 
-
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: FireTVCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([FireTVCamera(coordinator, entry)])
-
 
 class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
     _attr_has_entity_name = True
@@ -35,13 +28,9 @@ class FireTVCamera(CoordinatorEntity[FireTVCoordinator], Camera):
 
     @property
     def is_on(self) -> bool:
-        if self.coordinator.data:
-            return self.coordinator.data.get("screen_on", False)
-        return False
+        return bool(self.coordinator.data and self.coordinator.data.get("screen_on"))
 
-    async def async_camera_image(
-        self, width: int | None = None, height: int | None = None
-    ) -> bytes | None:
+    async def async_camera_image(self, width=None, height=None) -> bytes | None:
         data = self.coordinator.screenshot_data
         if data and len(data) > 100 and data[:4] == b'\x89PNG':
             return data

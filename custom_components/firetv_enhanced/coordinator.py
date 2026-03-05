@@ -10,14 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .adb_client import FireTVClient
-from .const import APP_MAP, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
+from .const import SYSTEM_APPS, SKIP_SOURCES, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-_SKIP_SOURCES = {
-    "com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
-    "com.amazon.tv.settings", "com.amazon.tv.notificationcenter",
-}
 
 
 class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -42,46 +37,54 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def discovered_packages(self) -> list[str]:
         return self._discovered_packages
 
-    def _build_full_app_map(self) -> dict[str, dict[str, str]]:
-        full: dict[str, dict[str, str]] = {}
-        full.update(APP_MAP)
-        for pkg in self._discovered_packages:
-            if pkg not in full:
-                parts = pkg.split(".")
-                name = parts[-1].replace("_", " ").title() if len(parts) >= 2 else pkg
-                full[pkg] = {"name": name, "icon": "mdi:application"}
-        for pkg, name in self._custom_apps.items():
-            if pkg in full:
-                full[pkg] = {"name": name, "icon": full[pkg].get("icon", "mdi:application")}
-            else:
-                full[pkg] = {"name": name, "icon": "mdi:application"}
-        return full
+    def _auto_name(self, package: str) -> str:
+        """Generate a readable name from a package string."""
+        parts = package.split(".")
+        if len(parts) >= 2:
+            raw = parts[-1]
+            # Handle common patterns
+            raw = raw.replace("_", " ").replace("-", " ")
+            return raw.title()
+        return package
 
     def get_app_name(self, package: str | None) -> str:
         if not package:
             return "Off"
-        full = self._build_full_app_map()
-        info = full.get(package)
-        if info:
-            return info["name"]
-        parts = package.split(".")
-        return parts[-1].replace("_", " ").title() if len(parts) >= 3 else package
+        # 1. User custom names first
+        if package in self._custom_apps:
+            return self._custom_apps[package]
+        # 2. System apps (for state detection display)
+        if package in SYSTEM_APPS:
+            return SYSTEM_APPS[package]["name"]
+        # 3. Auto-generate from package name
+        return self._auto_name(package)
 
     def get_app_icon(self, package: str | None) -> str:
         if not package:
             return "mdi:television-off"
-        full = self._build_full_app_map()
-        info = full.get(package)
-        return info["icon"] if info else "mdi:application"
+        if package in SYSTEM_APPS:
+            return SYSTEM_APPS[package]["icon"]
+        return "mdi:application"
 
     def get_source_list(self) -> list[str]:
-        full = self._build_full_app_map()
-        return sorted(v["name"] for k, v in full.items() if k not in _SKIP_SOURCES)
+        """Launchable apps: discovered + custom, excluding system."""
+        names = set()
+        for pkg in self._discovered_packages:
+            if pkg not in SKIP_SOURCES:
+                names.add(self.get_app_name(pkg))
+        for pkg, name in self._custom_apps.items():
+            if pkg not in SKIP_SOURCES:
+                names.add(name)
+        return sorted(names)
 
     def get_package_for_source(self, source: str) -> str | None:
-        full = self._build_full_app_map()
-        for pkg, info in full.items():
-            if info["name"] == source:
+        # Check custom first
+        for pkg, name in self._custom_apps.items():
+            if name == source:
+                return pkg
+        # Check discovered
+        for pkg in self._discovered_packages:
+            if self.get_app_name(pkg) == source:
                 return pkg
         return None
 
@@ -94,9 +97,9 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 self._discovered_packages = await self.client.discover_apps()
                 self._discovery_done = True
-                _LOGGER.info("Discovered %d installed apps", len(self._discovered_packages))
-            except Exception as err:
-                _LOGGER.debug("App discovery failed: %s", err)
+                _LOGGER.info("Discovered %d apps on Fire TV", len(self._discovered_packages))
+            except Exception:
+                pass
 
         self._update_count += 1
         if self._update_count >= 100:
@@ -122,9 +125,7 @@ class FireTVCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "media_title": None,
         }
 
-        if screen_on and package not in (
-            "com.amazon.tv.launcher", "com.amazon.firetv.screensaver", None
-        ):
+        if screen_on and package not in SKIP_SOURCES and package is not None:
             media = await self.client.get_media_info()
             data["playback_state"] = media.get("playback_state", "idle")
             data["media_title"] = media.get("media_title")

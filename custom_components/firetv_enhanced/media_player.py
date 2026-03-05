@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from homeassistant.components.media_player import (
-    MediaPlayerEntity,
-    MediaPlayerEntityFeature,
-    MediaPlayerState,
-    MediaType,
+    MediaPlayerEntity, MediaPlayerEntityFeature,
+    MediaPlayerState, MediaType,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -47,6 +46,7 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
 
     def __init__(self, coordinator: FireTVCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
+        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_media_player"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -54,6 +54,25 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
             manufacturer="Amazon",
             model="Fire TV Stick",
         )
+        self._camera_entity_id: str | None = None
+
+    @property
+    def entity_picture(self) -> str | None:
+        """Show live screenshot in the media player card."""
+        if not self.coordinator.screenshot_data:
+            return None
+        if not self.coordinator.data or not self.coordinator.data.get("screen_on"):
+            return None
+        # Find camera entity_id from registry (only once)
+        if self._camera_entity_id is None:
+            ent_reg = er.async_get(self.hass)
+            camera_uid = f"{self._entry.entry_id}_camera"
+            self._camera_entity_id = ent_reg.async_get_entity_id(
+                "camera", DOMAIN, camera_uid
+            ) or ""
+        if self._camera_entity_id:
+            return f"/api/camera_proxy/{self._camera_entity_id}"
+        return None
 
     @property
     def state(self) -> MediaPlayerState:
@@ -76,10 +95,7 @@ class FireTVMediaPlayer(CoordinatorEntity[FireTVCoordinator], MediaPlayerEntity)
     def media_title(self) -> str | None:
         if self.coordinator.data:
             title = self.coordinator.data.get("media_title")
-            if title:
-                return title
-            # Show app name as title when no media title detected
-            return self.coordinator.data.get("app_name")
+            return title if title else self.coordinator.data.get("app_name")
         return None
 
     @property

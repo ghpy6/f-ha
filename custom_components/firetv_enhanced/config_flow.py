@@ -17,7 +17,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .adb_client import FireTVClient
-from .const import APP_MAP, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
+from .const import DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DEFAULT_SCREENSHOT_INTERVAL, DOMAIN
 
 
 class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -31,17 +31,14 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._user_data = user_input
             return await self.async_step_confirm_tv()
-
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_HOST): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
+                    TextSelectorConfig(type=TextSelectorType.TEXT)),
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
                 vol.Optional(CONF_NAME, default="Fire TV"): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.TEXT)
-                ),
+                    TextSelectorConfig(type=TextSelectorType.TEXT)),
             }),
             errors=errors,
         )
@@ -52,7 +49,6 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = self._user_data[CONF_HOST]
             port = self._user_data.get(CONF_PORT, DEFAULT_PORT)
             name = self._user_data.get(CONF_NAME, f"Fire TV {host}")
-
             client = FireTVClient(host, port, hass_config_dir=self.hass.config.config_dir)
             if await client.connect(timeout=30.0):
                 await client.disconnect()
@@ -62,9 +58,7 @@ class FireTVEnhancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=name,
                     data={CONF_HOST: host, CONF_PORT: port, CONF_NAME: name},
                 )
-            else:
-                errors["base"] = "cannot_connect"
-
+            errors["base"] = "cannot_connect"
         return self.async_show_form(
             step_id="confirm_tv",
             data_schema=vol.Schema({}),
@@ -81,57 +75,13 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
 
-    def _build_app_list_text(self) -> str:
-        """Build a readable list of all known apps for the description."""
-        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
-        custom = self._config_entry.options.get("custom_apps", {})
-        lines = []
-
-        # Discovered apps
-        discovered = []
-        if coordinator and hasattr(coordinator, "discovered_packages"):
-            discovered = coordinator.discovered_packages or []
-
-        # All known packages: discovered + built-in keys
-        all_pkgs = set(discovered) | set(APP_MAP.keys())
-        # Remove non-launchable
-        skip = {"com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
-                "com.amazon.tv.settings", "com.amazon.tv.notificationcenter"}
-        all_pkgs -= skip
-
-        for pkg in sorted(all_pkgs):
-            if pkg in custom:
-                name = custom[pkg]
-                lines.append(f"  \u2705 {pkg} = {name}")
-            elif pkg in APP_MAP:
-                name = APP_MAP[pkg]["name"]
-                lines.append(f"  \u2022 {pkg} \u2192 {name}")
-            else:
-                parts = pkg.split(".")
-                auto_name = parts[-1].replace("_", " ").title() if len(parts) >= 2 else pkg
-                lines.append(f"  \u2022 {pkg} \u2192 {auto_name}")
-
-        return "\n".join(lines) if lines else "  No apps discovered yet"
-
-    def _build_custom_text_default(self) -> str:
-        """Pre-populate with current custom overrides."""
-        custom = self._config_entry.options.get("custom_apps", {})
-        stored_text = self._config_entry.options.get("custom_apps_text", "")
-        if stored_text:
-            return stored_text
-        if custom:
-            return "\n".join(f"{pkg} = {name}" for pkg, name in sorted(custom.items()))
-        return ""
-
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             new_options = dict(self._config_entry.options)
             new_options["scan_interval"] = int(
-                user_input.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-            )
+                user_input.get("scan_interval", DEFAULT_SCAN_INTERVAL))
             new_options["screenshot_interval"] = int(
-                user_input.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL)
-            )
+                user_input.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL))
 
             custom_apps = {}
             raw = user_input.get("custom_apps_text", "")
@@ -143,14 +93,18 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                     name = name.strip()
                     if pkg and name:
                         custom_apps[pkg] = name
-
             new_options["custom_apps"] = custom_apps
             new_options["custom_apps_text"] = raw
             return self.async_create_entry(title="", data=new_options)
 
         opts = self._config_entry.options
-        app_list = self._build_app_list_text()
-        custom_default = self._build_custom_text_default()
+        custom_text = opts.get("custom_apps_text", "")
+        if not custom_text:
+            custom = opts.get("custom_apps", {})
+            if custom:
+                custom_text = "\n".join(
+                    f"{pkg} = {name}" for pkg, name in sorted(custom.items())
+                )
 
         return self.async_show_form(
             step_id="init",
@@ -173,13 +127,10 @@ class FireTVOptionsFlow(config_entries.OptionsFlow):
                 )),
                 vol.Optional(
                     "custom_apps_text",
-                    default=custom_default,
+                    default=custom_text,
                 ): TextSelector(TextSelectorConfig(
                     multiline=True,
                     type=TextSelectorType.TEXT,
                 )),
             }),
-            description_placeholders={
-                "app_list": app_list,
-            },
         )

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up your Fire TV",
-        "description": "Enter your Fire TV connection details below.\n\n**How to find your IP address:**\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\n**How to enable ADB Debugging:**\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nBoth devices must be on the same Wi-Fi network.",
+        "description": "Enter your Fire TV connection details.\n\n**How to find your IP address:**\nSettings \u2192 My Fire TV \u2192 About \u2192 Network \u2192 IP Address\n\n**How to enable ADB Debugging:**\nSettings \u2192 My Fire TV \u2192 Developer Options \u2192 ADB Debugging \u2192 ON\n\nBoth devices must be on the same Wi-Fi network.",
         "data": {
           "host": "Fire TV IP Address",
           "port": "ADB Port",
@@ -17,7 +17,7 @@
       },
       "confirm_tv": {
         "title": "Approve on your TV",
-        "description": "When you click **Submit**, a USB debugging prompt will appear on your Fire TV screen.\n\n**You must do these two things:**\n1. Check the box **\"Always allow from this computer\"**\n2. Select **Allow** using your Fire TV remote\n\nYou have 30 seconds to approve. Make sure your TV is on and remote is nearby.\n\n**Important:** Checking \"Always allow\" ensures you won't be prompted again when saving settings later."
+        "description": "When you click **Submit**, a USB debugging prompt will appear on your Fire TV screen.\n\n**You must do these two things:**\n1. Check the box **\"Always allow from this computer\"**\n2. Select **Allow** using your Fire TV remote\n\nYou have 30 seconds to approve. Make sure your TV is on and remote is nearby.\n\nChecking \"Always allow\" ensures you won't be prompted again when saving settings later."
       }
     },
     "error": {
@@ -31,16 +31,16 @@
     "step": {
       "init": {
         "title": "Fire TV Enhanced Settings",
-        "description": "No TV approval needed to save settings.\n\n**Installed apps detected:**\n{app_list}\n\n\u2705 = custom name, \u2022 = auto-detected",
+        "description": "No TV approval needed to save. Apps are auto-detected from your device. Use the App Package sensor to find package names, then add custom names below.",
         "data": {
           "scan_interval": "App detection interval",
           "screenshot_interval": "Screenshot interval",
-          "custom_apps_text": "Custom app name overrides"
+          "custom_apps_text": "Custom app names"
         },
         "data_description": {
-          "scan_interval": "How often to check which app is running. 1s = fastest but uses more CPU. Default: 5s",
-          "screenshot_interval": "How often to capture a screenshot. 1s = real-time but uses more bandwidth. Default: 10s",
-          "custom_apps_text": "To rename an app, copy the package name from the list above and add:\npackage.name = Your Name\n\nOne per line. Example:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch"
+          "scan_interval": "How often to check which app is running. Default: 5s",
+          "screenshot_interval": "How often to capture a screenshot. Default: 10s",
+          "custom_apps_text": "One per line: package.name = Display Name\n\nExamples:\ncom.apple.atv = Apple TV\ntv.twitch.android.viewer = Twitch"
         }
       }
     }

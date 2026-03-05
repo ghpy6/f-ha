@@ -1,30 +1,30 @@
 launch_app:
   name: Launch App
-  description: Launch an app on the Fire TV by package name.
+  description: Launch an app on Fire TV by package name.
   fields:
     package:
       name: Package Name
-      description: "Android package name (e.g. com.netflix.ninja)"
+      description: Android package name (e.g. com.netflix.ninja)
       required: true
-      example: "com.netflix.ninja"
+      example: com.netflix.ninja
       selector:
         text:
 
 send_notification:
   name: Send Notification
-  description: Show a notification banner on the Fire TV screen.
+  description: Show a notification on the Fire TV screen. May not work on all Fire TV OS versions.
   fields:
     title:
       name: Title
       description: Notification title.
       required: true
-      example: "Home Assistant"
+      example: Home Assistant
       selector:
         text:
     message:
       name: Message
-      description: Notification message body.
+      description: Notification message.
       required: true
-      example: "Dinner is ready!"
+      example: Dinner is ready!
       selector:
         text:

@@ -37,15 +37,6 @@ PLAYBACK_STATES = {
     7: "error", 8: "connecting",
 }
 
-_SYSTEM_PREFIXES = (
-    "com.android.", "android", "com.svox.",
-    "com.google.android.inputmethod", "com.google.android.tv.remote",
-)
-_SYSTEM_EXACT = {
-    "com.amazon.tv.launcher", "com.amazon.firetv.screensaver",
-    "com.amazon.tv.settings", "com.amazon.tv.notificationcenter",
-}
-
 
 def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
     if config_dir:
@@ -54,11 +45,8 @@ def _setup_key_sync(config_dir: str | None) -> PythonRSASigner:
         key_dir = os.path.join(os.path.expanduser("~"), ".firetv_enhanced")
     os.makedirs(key_dir, exist_ok=True)
     key_path = os.path.join(key_dir, "adbkey")
-
     if not os.path.exists(key_path):
-        _LOGGER.info("Generating new ADB key at %s", key_path)
         keygen(key_path)
-
     with open(key_path) as f:
         priv = f.read()
     pub = ""
@@ -97,8 +85,7 @@ class FireTVClient:
             _LOGGER.info("Connected to Fire TV at %s:%d", self.host, self.port)
             return True
         except Exception as err:
-            _LOGGER.error("Failed to connect to %s:%d — %s: %s",
-                         self.host, self.port, type(err).__name__, err)
+            _LOGGER.error("Failed to connect to %s:%d: %s", self.host, self.port, err)
             self._device = None
             return False
 
@@ -114,7 +101,7 @@ class FireTVClient:
             async with self._lock:
                 return await self._device.shell(cmd)
         except Exception as err:
-            _LOGGER.debug("ADB command failed: %s — %s", cmd, err)
+            _LOGGER.debug("ADB command failed: %s: %s", cmd, err)
             return None
 
     async def _key(self, keycode: int) -> None:
@@ -167,6 +154,7 @@ class FireTVClient:
         return data if data[:4] == b'\x89PNG' else None
 
     async def discover_apps(self) -> list[str]:
+        """Scan all third-party packages installed on the device."""
         result = await self._shell("pm list packages -3 2>/dev/null")
         if not result:
             return []
@@ -175,18 +163,44 @@ class FireTVClient:
             line = line.strip()
             if line.startswith("package:"):
                 pkg = line[8:].strip()
-                if not pkg or pkg in _SYSTEM_EXACT:
-                    continue
-                if any(pkg.startswith(p) for p in _SYSTEM_PREFIXES):
-                    continue
-                packages.append(pkg)
+                if pkg:
+                    packages.append(pkg)
         return sorted(packages)
 
-    async def send_notification(self, title: str, message: str) -> bool:
-        safe_title = title.replace('"', '\\"').replace("'", "\\'")
-        safe_msg = message.replace('"', '\\"').replace("'", "\\'")
+    async def get_app_label(self, package: str) -> str | None:
+        """Try to get the human-readable app label from the device."""
         result = await self._shell(
-            f'cmd notification post -S bigtext -t "{safe_title}" "ha_notify" "{safe_msg}"'
+            f"dumpsys package {package} | grep -A1 'labelRes=' | head -2"
+        )
+        if result and "label=" in result:
+            match = re.search(r"label=([^\s]+)", result)
+            if match:
+                return match.group(1)
+        return None
+
+    async def send_notification(self, title: str, message: str) -> bool:
+        """Send notification to Fire TV. Tries multiple methods."""
+        safe_title = title.replace("'", "")
+        safe_msg = message.replace("'", "")
+
+        # Method 1: Android settings toast (most reliable on Fire TV)
+        result = await self._shell(
+            f"am start -a android.settings.SETTINGS 2>/dev/null; "
+            f"input keyevent 4; "
+            f"cmd statusbar expand-notifications 2>/dev/null"
+        )
+
+        # Method 2: Direct notification post
+        result = await self._shell(
+            f"cmd notification post -S bigtext -t '{safe_title}' ha_tag '{safe_msg}' 2>/dev/null"
+        )
+        if result is not None and "Error" not in (result or ""):
+            return True
+
+        # Method 3: am broadcast
+        result = await self._shell(
+            f"am broadcast -a android.intent.action.SHOW_TOAST "
+            f"--es message '{safe_title}: {safe_msg}' 2>/dev/null"
         )
         return result is not None
 

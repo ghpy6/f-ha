@@ -41,7 +41,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scan_interval=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL),
         screenshot_interval=entry.options.get("screenshot_interval", DEFAULT_SCREENSHOT_INTERVAL),
     )
-
     custom_apps = entry.options.get("custom_apps", {})
     if custom_apps:
         coordinator.set_custom_apps(custom_apps)
@@ -54,7 +53,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
-    # Register services once
     if not hass.services.has_service(DOMAIN, "launch_app"):
         async def handle_launch_app(call: ServiceCall) -> None:
             coord = _get_coordinator(hass)
@@ -78,7 +76,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 vol.Required("message"): cv.string,
             }),
         )
-
     return True
 
 
